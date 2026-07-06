@@ -123,6 +123,8 @@ class H(BaseHTTPRequestHandler):
             self._hw(q.get("ep", [""])[0])
         elif u.path == "/runall":
             self._runall(q)
+        elif u.path == "/artall":
+            self._artall(q)
         elif u.path == "/runs":
             rows = []
             try:
@@ -224,6 +226,79 @@ class H(BaseHTTPRequestHandler):
                         pass
                 CONNS.clear()
 
+
+def _art_prompt(i, n, w, h, shape):
+    """Conductor pattern: every agent imagines the SAME full canvas, renders only its column slice.
+    For math shapes (wave/sine) the conductor PRECOMPUTES each column's ink row, so slices align
+    perfectly even on small models."""
+    import math
+    x0 = (i - 1) * w // n
+    x1 = i * w // n
+    sw = x1 - x0
+    hint = ""
+    s = shape.lower()
+    if "wave" in s or "sine" in s or "sin" in s:
+        amp = max(1, h // 2 - 2)
+        rows = [int(round(h / 2 + amp * math.sin(2 * math.pi * x / w))) for x in range(x0, x1)]
+        rows = [min(h - 1, max(0, r)) for r in rows]
+        table = ", ".join(f"col {c}→row {r}" for c, r in enumerate(rows))
+        hint = (f" I have PRECOMPUTED your ink positions. Your slice has {sw} local columns (0..{sw-1}). "
+                f"Place a '#' at exactly these (local column → row) positions, one '#' per column: {table}. "
+                f"Every other character in your slice is a space. Do not add any other ink.")
+    return (
+        f"You are renderer {i} of {n} in a perfectly synchronized ASCII-art grid. "
+        f"The GLOBAL canvas is {w} columns wide and {h} rows tall and depicts: {shape}.{hint} "
+        f"Coordinate system: column 0 is the far left of the FULL canvas, row 0 is the top. "
+        f"First mentally render the ENTIRE {w}x{h} picture, then output ONLY your vertical slice: "
+        f"columns {x0} through {x1-1} (slice width {sw}) for ALL {h} rows, top to bottom. "
+        f"Use '#' for solid ink, '~' or '.' for soft edges, and spaces for empty background. "
+        f"Every other renderer imagines the exact same full picture, so your slice must line up with theirs. "
+        f"OUTPUT FORMAT (strict): exactly {h} lines, each line exactly {sw} characters. "
+        f"No code fences, no commentary, no blank lines before or after, nothing else."
+    )
+
+
+class ArtH:  # namespace holder (methods bound onto H below)
+    def _artall(self, q):
+        ep = q.get("ep", [""])[0]; model = q.get("model", ["?"])[0]
+        shape = q.get("shape", ["a sine wave"])[0]
+        w = max(20, min(240, int(q.get("w", ["120"])[0])))
+        h = max(6, min(60, int(q.get("h", ["24"])[0])))
+        n = max(1, min(16, int(q.get("n", ["6"])[0])))
+        temp = float(q.get("temp", ["0.2"])[0])
+        think = q.get("think", ["0"])[0] == "1"
+        STOP.clear()
+        with CLOCK:
+            CONNS.clear()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        evq = queue.Queue()
+        for i in range(1, n + 1):
+            threading.Thread(target=stream_one,
+                             args=(i, ep, model, _art_prompt(i, n, w, h, shape), h * (w // n + 10) + 500, temp, think, evq),
+                             daemon=True).start()
+        done = 0
+        try:
+            while done < n:
+                ev = evq.get()
+                if ev.get("done") or ev.get("err") or ev.get("killed"):
+                    done += 1
+                self.wfile.write(("data: " + json.dumps(ev) + "\n\n").encode())
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            STOP.set()
+            with CLOCK:
+                for r in CONNS:
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+                CONNS.clear()
+
+
+H._artall = ArtH._artall
 
 if __name__ == "__main__":
     print(f"Coding Agent Latency Monitor v3 (kill switch) on http://0.0.0.0:{PORT}/")

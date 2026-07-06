@@ -63,8 +63,38 @@
   table.pt th{color:var(--dim);text-transform:uppercase;font-size:10px;cursor:pointer;position:sticky;top:0;background:var(--bg)}
   table.pt td.l,table.pt th.l{text-align:left}
   table.pt tr:hover td{background:#141a25}
+
+  /* ===== Matrix Mode (additive overrides only — normal theme untouched when body.matrix absent) ===== */
+  #mrain{display:none;position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.22}
+  #mtx{background:var(--card);color:var(--dim);border:1px solid var(--edge)}
+  body.matrix{--bg:#000;--panel:#000;--card:#010b03;--edge:#0b3d1a;--ink:#00ff41;--dim:#00a832;
+    --teal:#00ff41;--org:#57ff86;--pur:#2fe864;--grn:#00ff41;--red:#8dffab;--blue:#39ff6f}
+  body.matrix #mrain{display:block}
+  body.matrix header,body.matrix .tabs,body.matrix #liveview,body.matrix #pastview{position:relative;z-index:1}
+  body.matrix button{background:#000;color:#00ff41;border:1px solid #00ff41;text-shadow:0 0 5px rgba(0,255,65,.55)}
+  body.matrix #run,body.matrix #stop,body.matrix #clear,body.matrix #copybtn{background:#000;color:#00ff41;border:1px solid #00ff41}
+  body.matrix #kill{background:#000;color:#a8ffbf;border:1px solid #a8ffbf}
+  body.matrix #mtx{background:#00ff41;color:#000;text-shadow:none;box-shadow:0 0 12px rgba(0,255,65,.55)}
+  @keyframes killpulseM{0%,100%{box-shadow:0 0 0 0 rgba(0,255,65,0)}50%{box-shadow:0 0 0 5px rgba(0,255,65,.3)}}
+  body.matrix.running #kill{animation:killpulseM 1.5s ease-in-out infinite}
+  body.matrix .tab{border-bottom:none}
+  body.matrix .tab.active{background:#000;color:#00ff41;border-color:#00ff41}
+  body.matrix .total{background:#001505;color:#00ff41;border-color:#00ff41;text-shadow:0 0 6px rgba(0,255,65,.5)}
+  body.matrix .pill.idle{background:#001505;color:#00a832}
+  body.matrix .pill.think{background:#001505;color:#2fe864}
+  body.matrix .pill.answer{background:#002b0a;color:#00ff41}
+  body.matrix .pill.done{background:#00ff41;color:#000}
+  body.matrix .pill.err{background:#000;color:#a8ffbf;outline:1px solid #a8ffbf}
+  body.matrix pre{background:rgba(0,0,0,.82);color:#00ff41;text-shadow:0 0 6px rgba(0,255,65,.55)}
+  body.matrix #share{background:rgba(0,0,0,.82);color:#00ff41;border-color:#0b3d1a;text-shadow:0 0 6px rgba(0,255,65,.45)}
+  body.matrix .hw{background:#000c03}
+  body.matrix .hw .v{color:#00ff41}
+  body.matrix table.pt tr:hover td{background:#001c07}
+  body.matrix .cbar .track{background:#001505}
+  body.matrix .cbar .fill{background:linear-gradient(90deg,#00ff41,#0a5f26)}
 </style></head>
 <body>
+<canvas id="mrain" aria-hidden="true"></canvas>
 <header>
   <h1>⚡ Coding Agent Latency Monitor</h1>
   <span class="meta">Model: <b id="mLabel">—</b> · Endpoint: <b id="mEp">—</b></span>
@@ -76,12 +106,13 @@
     <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
     <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
     <label>Think<select id="think"><option value="0" selected>off</option><option value="1">on</option></select></label>
-    <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button><button id="clear">🧹 Clear</button>
+    <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button><button id="clear">🧹 Clear</button><button id="mtx">🟩 Matrix</button>
   </div>
 </header>
 <div class="tabs">
   <button class="tab active" id="tab-live" onclick="showTab('live')">⚡ Live Monitor</button>
   <button class="tab" id="tab-past" onclick="showTab('past')">📊 Past Runs</button>
+  <button class="tab" id="tab-art" onclick="showTab('art')">🎨 Art Mode</button>
 </div>
 <div id="liveview">
 <div class="bar"><span class="sec" style="padding:0">Streaming Outputs</span><span class="total" id="total">Total live 0.0 tok/s</span></div>
@@ -101,6 +132,25 @@
   </div>
   <div id="pchart"></div>
   <div id="ptable"></div>
+</div>
+
+<div id="artview" style="display:none">
+  <div class="pastbar">
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Shape
+      <input id="ashape" style="width:260px" value="a sine wave"></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Agents
+      <input class="num" id="an" type="number" value="6" min="1" max="16"></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Width
+      <input class="num" id="aw" type="number" value="120" min="20" max="240"></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Height
+      <input class="num" id="ah" type="number" value="24" min="6" max="60"></label>
+    <button id="arun" style="background:var(--pur);color:#12071f">🎨 Draw</button>
+    <span id="astat" class="meta"></span>
+  </div>
+  <div class="sec">Agents drawing their slices (live)</div>
+  <div id="aslices" style="display:flex;gap:2px;overflow-x:auto;padding:10px 16px"></div>
+  <div class="sec">Stitched result — <span id="ameta" style="text-transform:none"></span></div>
+  <pre id="acanvas" style="height:auto;max-height:560px;font-size:11px;line-height:1.05;letter-spacing:0"></pre>
 </div>
 
 <script>
@@ -244,10 +294,53 @@ async function pollHw(c){
 }
 // ---- Past Runs (persisted to Seagate via /save + /runs) ----
 let PAST=[];
-function showTab(t){const live=t==='live';
-  $('liveview').style.display=live?'block':'none'; $('pastview').style.display=live?'none':'block';
-  $('tab-live').classList.toggle('active',live); $('tab-past').classList.toggle('active',!live);
-  if(!live)loadPastRuns();}
+function showTab(t){
+  $('liveview').style.display=t==='live'?'block':'none';
+  $('pastview').style.display=t==='past'?'block':'none';
+  $('artview').style.display=t==='art'?'block':'none';
+  $('tab-live').classList.toggle('active',t==='live');
+  $('tab-past').classList.toggle('active',t==='past');
+  $('tab-art').classList.toggle('active',t==='art');
+  if(t==='past')loadPastRuns();}
+
+// ---- 🎨 Art Mode: N agents each render one vertical slice of the same canvas; stitched live ----
+let ARTCTRL=null;
+function stripFences(t){return t.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').replace(/^\s*\n/,'').replace(/\s+$/,'');}
+function stitchArt(texts,n,w,h){
+  const sw=[],out=[];
+  for(let i=1;i<=n;i++){const x0=Math.floor((i-1)*w/n),x1=Math.floor(i*w/n);sw.push(x1-x0);}
+  const grids=texts.map((t,idx)=>{
+    let lines=stripFences(t||'').split('\n');
+    if(lines.length>h)lines=lines.slice(0,h);
+    while(lines.length<h)lines.push('');
+    return lines.map(l=>l.replace(/\t/g,' ').padEnd(sw[idx]).slice(0,sw[idx]));
+  });
+  for(let r=0;r<h;r++)out.push(grids.map(g=>g[r]).join(''));
+  return out.join('\n');
+}
+$('arun').onclick=async ()=>{
+  if(ARTCTRL)ARTCTRL.abort(); ARTCTRL=new AbortController();
+  const c=cur(), n=Math.max(1,Math.min(16,+$('an').value)), w=+$('aw').value, h=+$('ah').value;
+  const texts=Array(n).fill(''); let done=0;
+  $('aslices').innerHTML=Array.from({length:n},(_,i)=>`<pre id="asl${i+1}" style="flex:1 0 auto;min-width:60px;height:200px;font-size:8px;line-height:1.05">agent ${i+1}…</pre>`).join('');
+  $('acanvas').textContent=''; $('ameta').textContent=`"${$('ashape').value}" · ${n} agents · ${w}×${h}`;
+  $('astat').textContent='⏳ drawing…';
+  const url=`/artall?ep=${encodeURIComponent(c.ep)}&model=${encodeURIComponent(c.model)}&shape=${encodeURIComponent($('ashape').value)}&w=${w}&h=${h}&n=${n}&temp=0.2&think=0`;
+  try{
+    const r=await fetch(url,{signal:ARTCTRL.signal}); const rd=r.body.getReader(),dec=new TextDecoder(); let buf='';
+    while(true){const {done:d,value}=await rd.read(); if(d)break; buf+=dec.decode(value,{stream:true});
+      let nl; while((nl=buf.indexOf('\n\n'))>=0){const blk=buf.slice(0,nl); buf=buf.slice(nl+2);
+        const dl=blk.split('\n').find(l=>l.startsWith('data:')); if(!dl)continue;
+        let ev; try{ev=JSON.parse(dl.slice(5).trim())}catch{continue}
+        const i=ev.run; if(!i)continue;
+        if(ev.c){texts[i-1]+=ev.c; const el=$('asl'+i); if(el){el.textContent=stripFences(texts[i-1]); el.scrollTop=el.scrollHeight;}}
+        if(ev.done||ev.err||ev.killed){done++; $('astat').textContent=`⏳ ${done}/${n} slices done…`;
+          $('acanvas').textContent=stitchArt(texts,n,w,h);}
+      }}
+    $('acanvas').textContent=stitchArt(texts,n,w,h);
+    $('astat').textContent=`✅ ${n} agents, stitched ${w}×${h}`;
+  }catch(e){if(!ARTCTRL.signal.aborted)$('astat').textContent='❌ '+e.message;}
+};
 async function saveRun(rec){try{await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});}catch(e){}}
 async function loadPastRuns(){try{const d=await (await fetch('/runs')).json(); PAST=d.runs||[];
   $('pstore').textContent='stored: '+(d.store||'');
@@ -267,4 +360,51 @@ function renderPast(){
   $('ptable').innerHTML=`<div class="tbwrap"><table class="pt"><thead><tr>${th}</tr></thead><tbody>${td}</tbody></table></div>`;
 }
 loadPresets(); setRunning(false);
+</script>
+<script>
+/* ---- Matrix Mode: theme toggle + digital rain (additive; app logic above is untouched) ---- */
+(function(){
+  const cv=document.getElementById('mrain'), btn=document.getElementById('mtx');
+  const GLYPHS='アィイウェエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$+-*/=<>#%@';
+  const FS=16; let ctx=null, raf=null, cols=0, drops=[], last=0;
+  function resize(){
+    cv.width=window.innerWidth; cv.height=window.innerHeight;
+    const n=Math.ceil(cv.width/FS), old=drops; cols=n; drops=[];
+    for(let i=0;i<n;i++)drops[i]=(old[i]!==undefined)?old[i]:Math.floor(Math.random()*-60);
+  }
+  function frame(t){
+    raf=requestAnimationFrame(frame);
+    if(t-last<50)return; last=t;
+    ctx.fillStyle='rgba(0,0,0,0.10)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.font=FS+'px ui-monospace,Menlo,monospace';
+    for(let i=0;i<cols;i++){
+      const y=drops[i]*FS;
+      if(y>0){
+        ctx.fillStyle=(Math.random()<0.10)?'#c8ffd8':'#00ff41';
+        ctx.fillText(GLYPHS[(Math.random()*GLYPHS.length)|0], i*FS, y);
+      }
+      if(y>cv.height&&Math.random()>0.972)drops[i]=Math.floor(Math.random()*-30);
+      else drops[i]++;
+    }
+  }
+  function startRain(){
+    if(raf!==null)return;
+    ctx=cv.getContext('2d'); resize();
+    window.addEventListener('resize',resize);
+    last=0; raf=requestAnimationFrame(frame);
+  }
+  function stopRain(){
+    if(raf!==null){cancelAnimationFrame(raf); raf=null;}
+    window.removeEventListener('resize',resize);
+    if(ctx)ctx.clearRect(0,0,cv.width,cv.height);
+  }
+  function applyMatrix(on){
+    document.body.classList.toggle('matrix',on);
+    if(on)startRain(); else stopRain();
+    try{localStorage.setItem('calm_matrix',on?'1':'0');}catch(e){}
+  }
+  btn.addEventListener('click',()=>applyMatrix(!document.body.classList.contains('matrix')));
+  let saved=false; try{saved=localStorage.getItem('calm_matrix')==='1';}catch(e){}
+  if(saved)applyMatrix(true);
+})();
 </script></body></html>

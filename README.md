@@ -14,6 +14,8 @@ Great for stress-testing a local rig (DGX Spark, RTX box, etc.) under concurrent
 - **Hardware strip** — pulls vLLM `/metrics` (running/waiting/KV-cache) for any endpoint, and — optionally — **real per-GPU util / memory / temperature via SSH** (see `nodes.json`).
 - **Shareable summary** — on finish/stop it computes peak aggregate, sustained avg, per-stream high/low/avg tok/s, total tokens, avg TTFT/E2E, wall time, and gives you a **📋 Copy for sharing** block.
 - **Zero dependencies** — pure Python stdlib (`http.server`) + one static HTML file. Runs anywhere Python 3 does.
+- **🟩 Matrix Mode** — header toggle that reskins the whole monitor Matrix-style: black everything, phosphor-green glow, digital-rain canvas falling behind your streaming agents. Persists via localStorage.
+- **🎨 Art Mode** — the fun experiment: N agents each render one vertical slice of the SAME ASCII canvas (conductor pattern — every agent gets the global spec + its exact column range) and the UI stitches them live into one picture. Doubles as a surprisingly brutal *spatial-sync benchmark*: small models produce chaos, big models produce recognizable shapes. Try `a sine wave` (ink positions get precomputed) or freestyle (`a dog`, `a rocket`).
 
 ## Quick start
 
