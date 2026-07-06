@@ -28,6 +28,15 @@ PRESETS = _load_json("presets.json", {"Local vLLM (:8000)": "http://localhost:80
 # See nodes.example.json. Empty -> the hardware strip just shows vLLM /metrics.
 NODES = {k: (v[0], os.path.expanduser(v[1])) for k, v in _load_json("nodes.json", {}).items()}
 
+# Persistent run history. Prefer an external drive so runs survive; fall back to local.
+_RUNS_ROOT = _load_json("config.json", {}).get("runs_dir") or "/Volumes/Seagate/coding-agent-monitor-runs"
+RUNS_DIR = _RUNS_ROOT if os.path.isdir(os.path.dirname(_RUNS_ROOT.rstrip("/"))) else HERE
+try:
+    os.makedirs(RUNS_DIR, exist_ok=True)
+except Exception:
+    RUNS_DIR = HERE
+RUNS_FILE = os.path.join(RUNS_DIR, "runs.jsonl")
+
 STOP = threading.Event()          # set by /kill -> workers bail
 CONNS = []                        # live upstream responses (so /kill can slam them shut)
 CLOCK = threading.Lock()
@@ -114,6 +123,35 @@ class H(BaseHTTPRequestHandler):
             self._hw(q.get("ep", [""])[0])
         elif u.path == "/runall":
             self._runall(q)
+        elif u.path == "/runs":
+            rows = []
+            try:
+                with open(RUNS_FILE) as f:
+                    for ln in f:
+                        ln = ln.strip()
+                        if ln:
+                            try:
+                                rows.append(json.loads(ln))
+                            except Exception:
+                                pass
+            except FileNotFoundError:
+                pass
+            rows.reverse()  # newest first
+            self._send(200, "application/json", json.dumps({"runs": rows, "store": RUNS_FILE}).encode())
+        else:
+            self._send(404, "text/plain", b"nope")
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        if u.path == "/save":
+            try:
+                ln = int(self.headers.get("Content-Length", 0))
+                rec = json.loads(self.rfile.read(ln).decode("utf-8", "ignore"))
+                with open(RUNS_FILE, "a") as f:
+                    f.write(json.dumps(rec) + "\n")
+                self._send(200, "application/json", json.dumps({"ok": True, "store": RUNS_FILE}).encode())
+            except Exception as e:
+                self._send(200, "application/json", json.dumps({"ok": False, "err": str(e)[:140]}).encode())
         else:
             self._send(404, "text/plain", b"nope")
 

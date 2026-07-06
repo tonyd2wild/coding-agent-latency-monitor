@@ -43,6 +43,16 @@ Set **Parallel**, **Max tokens**, **Temp**, **Thinking**, pick an endpoint, hit 
 
 Both files are **git-ignored** — keep your real hosts/keys out of the repo.
 
+## Run history & Past Runs
+
+Every finished run auto-saves to `runs.jsonl` — model, quant/note, cluster, parallel count, peak & sustained aggregate tok/s, per-stream high/low/avg, TTFT, E2E, total tokens, and timestamp. The **📊 Past Runs** tab renders them in a searchable, model-filterable table with a per-run throughput chart, so nothing is ever lost.
+
+By default runs are stored next to the server. To persist them on an external drive, add a `config.json`:
+```json
+{ "runs_dir": "/Volumes/YourDrive/coding-agent-monitor-runs" }
+```
+(`config.json` and `runs.jsonl` are git-ignored.)
+
 ## Notes
 
 - The `thinking` toggle sends `chat_template_kwargs.enable_thinking` (works with models that honor it; harmless otherwise).

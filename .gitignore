@@ -3,3 +3,5 @@ nodes.json
 __pycache__/
 *.pyc
 /tmp/
+config.json
+runs.jsonl

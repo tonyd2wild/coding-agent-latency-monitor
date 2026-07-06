@@ -45,6 +45,24 @@
   .st .u{color:var(--dim);font-size:11px;font-weight:400}
   #share{width:100%;background:#0d1119;border:1px solid var(--edge);border-radius:10px;color:#cbd5e1;padding:12px;white-space:pre-wrap;font-size:12px}
   #copybtn{background:var(--blue);color:#04121f;margin-top:8px}
+  .tabs{display:flex;gap:4px;padding:10px 16px 0}
+  .tab{background:var(--card);border:1px solid var(--edge);border-bottom:none;color:var(--dim);
+    border-radius:8px 8px 0 0;padding:8px 16px;font-weight:700;cursor:pointer;transition:filter .15s}
+  .tab:hover{filter:brightness(1.15)} .tab.active{background:var(--panel);color:var(--ink)}
+  .pastbar{display:flex;gap:10px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--edge);flex-wrap:wrap}
+  #psearch{flex:0 0 300px;max-width:60vw}
+  #pchart{padding:14px 16px;display:flex;flex-direction:column;gap:5px}
+  .cbar{display:flex;align-items:center;gap:8px;font-size:11px}
+  .cbar .lbl{flex:0 0 200px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+  .cbar .track{flex:1;background:var(--card);border-radius:4px;height:15px;position:relative;overflow:hidden}
+  .cbar .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#2dd4bf,#60a5fa);border-radius:4px}
+  .cbar .val{flex:0 0 84px;color:var(--teal);font-weight:700}
+  .tbwrap{overflow-x:auto;padding:0 16px 24px}
+  table.pt{width:100%;border-collapse:collapse;font-size:11.5px}
+  table.pt th,table.pt td{padding:7px 9px;border-bottom:1px solid var(--edge);text-align:right;white-space:nowrap}
+  table.pt th{color:var(--dim);text-transform:uppercase;font-size:10px;cursor:pointer;position:sticky;top:0;background:var(--bg)}
+  table.pt td.l,table.pt th.l{text-align:left}
+  table.pt tr:hover td{background:#141a25}
 </style></head>
 <body>
 <header>
@@ -53,6 +71,7 @@
   <div class="cfg">
     <label>Endpoint<select id="preset"></select></label>
     <label>Prompt<input class="prompt" id="prompt" value="Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML."></label>
+    <label>Quant/note<input class="num" id="quant" style="width:104px" placeholder="Int4" value=""></label>
     <label>Parallel<input class="num" id="par" type="number" value="6" min="1" max="32"></label>
     <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
     <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
@@ -60,12 +79,29 @@
     <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button><button id="clear">🧹 Clear</button>
   </div>
 </header>
+<div class="tabs">
+  <button class="tab active" id="tab-live" onclick="showTab('live')">⚡ Live Monitor</button>
+  <button class="tab" id="tab-past" onclick="showTab('past')">📊 Past Runs</button>
+</div>
+<div id="liveview">
 <div class="bar"><span class="sec" style="padding:0">Streaming Outputs</span><span class="total" id="total">Total live 0.0 tok/s</span></div>
 <div id="grid"></div>
 <div class="sec">Hardware Metrics</div>
 <div id="hw"></div>
 <div class="sec" id="sumhdr" style="display:none">Run Summary <button id="copybtn" style="padding:5px 12px">📋 Copy for sharing</button></div>
 <div id="summary" style="display:none"></div>
+</div><!-- /liveview -->
+
+<div id="pastview" style="display:none">
+  <div class="pastbar">
+    <input id="psearch" placeholder="🔍 search model / quant / cluster…" oninput="renderPast()">
+    <select id="pmodel" onchange="renderPast()"><option value="">All models</option></select>
+    <span id="pcount" class="meta"></span>
+    <span id="pstore" class="meta" style="margin-left:auto;font-size:10px"></span>
+  </div>
+  <div id="pchart"></div>
+  <div id="ptable"></div>
+</div>
 
 <script>
 let CTRL=null, HWTIMER=null, PRESETS={}, PEAK=0, RUN_T0=0, META={}, SUMMED=false;
@@ -152,6 +188,10 @@ function renderSummary(){
 Recipe by @Tech2Wild`;
   $('share').textContent=share;
   $('sumhdr').style.display='flex'; $('summary').style.display='block';
+  saveRun({ts:new Date().toISOString(), model:META.model, quant:($('quant').value||'').trim(), cluster:META.hw,
+    parallel:runs.length, peak:+PEAK.toFixed(1), sustained:+combined.toFixed(1),
+    hi:+hi.toFixed(1), lo:+lo.toFixed(1), avg:+av.toFixed(1),
+    ttft:+mean(ttfts).toFixed(2), e2e:+mean(e2es).toFixed(1), total:totalTok, wall:+wall.toFixed(1)});
 }
 $('copybtn').onclick=()=>{const t=$('share')?$('share').textContent:'';navigator.clipboard.writeText(t).then(()=>{$('copybtn').textContent='✓ Copied';setTimeout(()=>$('copybtn').textContent='📋 Copy for sharing',1500);});};
 
@@ -201,6 +241,30 @@ async function pollHw(c){
       <div class="hw"><div class="k">Model</div><div class="v" style="color:var(--blue);font-size:12px">${c.model}</div></div>`;
     $('hw').innerHTML=html;
   }catch{}
+}
+// ---- Past Runs (persisted to Seagate via /save + /runs) ----
+let PAST=[];
+function showTab(t){const live=t==='live';
+  $('liveview').style.display=live?'block':'none'; $('pastview').style.display=live?'none':'block';
+  $('tab-live').classList.toggle('active',live); $('tab-past').classList.toggle('active',!live);
+  if(!live)loadPastRuns();}
+async function saveRun(rec){try{await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});}catch(e){}}
+async function loadPastRuns(){try{const d=await (await fetch('/runs')).json(); PAST=d.runs||[];
+  $('pstore').textContent='stored: '+(d.store||'');
+  const sel=$('pmodel'),cur=sel.value,models=[...new Set(PAST.map(r=>r.model))].sort();
+  sel.innerHTML='<option value="">All models</option>'+models.map(m=>`<option${m===cur?' selected':''}>${m}</option>`).join('');
+  renderPast();}catch(e){}}
+function fmt(v,d){d=(d==null?1:d);return (v==null||isNaN(+v))?'—':(+v).toFixed(d);}
+function renderPast(){
+  const q=($('psearch').value||'').toLowerCase(),mf=$('pmodel').value;
+  const rows=PAST.filter(r=>(!mf||r.model===mf)&&(!q||`${r.model} ${r.quant||''} ${r.cluster||''}`.toLowerCase().includes(q)));
+  $('pcount').textContent=rows.length+' run'+(rows.length===1?'':'s');
+  const cr=rows.slice(0,20),mx=Math.max(1,...cr.map(r=>+r.sustained||0));
+  $('pchart').innerHTML=cr.length?cr.map(r=>`<div class="cbar"><span class="lbl">${r.model} · ${r.parallel}p${r.quant?' · '+r.quant:''}</span><span class="track"><span class="fill" style="width:${100*(+r.sustained||0)/mx}%"></span></span><span class="val">${(+r.sustained||0).toFixed(1)} t/s</span></div>`).join(''):'<span class="meta">no runs yet — finish a run and it lands here</span>';
+  const cols=['Time','Model','Quant','Cluster','Par','Peak agg','Sustained','Hi','Lo','Avg','TTFT','E2E','Tokens'];
+  const th=cols.map((x,i)=>`<th class="${i<4?'l':''}">${x}</th>`).join('');
+  const td=rows.map(r=>`<tr><td class="l">${(r.ts||'').replace('T',' ').slice(0,16)}</td><td class="l">${r.model||''}</td><td class="l">${r.quant||'—'}</td><td class="l">${r.cluster||''}</td><td>${r.parallel||''}</td><td>${fmt(r.peak)}</td><td>${fmt(r.sustained)}</td><td>${fmt(r.hi)}</td><td>${fmt(r.lo)}</td><td>${fmt(r.avg)}</td><td>${fmt(r.ttft,2)}</td><td>${fmt(r.e2e,0)}</td><td>${(+r.total||0).toLocaleString()}</td></tr>`).join('');
+  $('ptable').innerHTML=`<div class="tbwrap"><table class="pt"><thead><tr>${th}</tr></thead><tbody>${td}</tbody></table></div>`;
 }
 loadPresets(); setRunning(false);
 </script></body></html>
