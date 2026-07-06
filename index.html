@@ -113,8 +113,9 @@ function onEvent(ev){
   if(delta){ if(r.tFirst===null){r.tFirst=performance.now();r.ttftS=(r.tFirst-r.t0)/1000;$('ttft'+i).textContent=r.ttftS.toFixed(2)+'s';p.className='pill answer';p.textContent='answering';}
     r.chars+=delta.length; r.txt+=delta; if(r.txt.length<20000){out.textContent=r.txt;out.scrollTop=out.scrollHeight;} }
   if(ev.u)r.usageTok=ev.u;
-  if(r.tFirst){const est=r.usageTok||Math.round(r.chars/4),dt=(performance.now()-r.tFirst)/1000||1;
-    r.tps=est/dt; if(r.tps>(r.peakTps||0))r.peakTps=r.tps; $('tps'+i).textContent=r.tps.toFixed(1); $('tok'+i).textContent=est; agg();}
+  if(r.tFirst){const est=r.usageTok||Math.round(r.chars/4),dt=(performance.now()-r.tFirst)/1000;
+    $('tok'+i).textContent=est;
+    if(dt>0.4){r.tps=est/dt; if(r.tps>(r.peakTps||0))r.peakTps=r.tps; $('tps'+i).textContent=r.tps.toFixed(1); agg();}}
 }
 
 function renderSummary(){
