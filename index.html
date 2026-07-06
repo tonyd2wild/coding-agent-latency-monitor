@@ -13,9 +13,15 @@
   .cfg label{color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px}
   input,select{background:var(--card);border:1px solid var(--edge);color:var(--ink);border-radius:6px;padding:5px 7px;font:12px ui-monospace,monospace}
   input.prompt{width:240px} input.num{width:66px}
-  button{border:none;border-radius:7px;padding:8px 16px;font-weight:700;cursor:pointer}
+  button{border:none;border-radius:7px;padding:8px 16px;font-weight:700;cursor:pointer;
+    transition:transform .07s ease,filter .15s ease,opacity .15s ease,box-shadow .2s ease}
+  button:hover:not(:disabled){filter:brightness(1.15)}
+  button:active:not(:disabled){transform:translateY(1px) scale(.95)}
+  button:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(.35)}
   #run{background:var(--grn);color:#04120c} #stop{background:var(--card);color:var(--ink);border:1px solid var(--edge)}
   #kill{background:var(--red);color:#1a0505;font-weight:800}
+  #kill:not(:disabled){animation:killpulse 1.5s ease-in-out infinite}
+  @keyframes killpulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}50%{box-shadow:0 0 0 5px rgba(248,113,113,.22)}}
   .bar{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--edge)}
   .total{background:#0e2a26;color:var(--teal);border:1px solid #164e46;border-radius:8px;padding:5px 12px;font-weight:700}
   #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;padding:14px 16px}
@@ -63,6 +69,7 @@
 <script>
 let CTRL=null, HWTIMER=null, PRESETS={}, PEAK=0, RUN_T0=0, META={}, SUMMED=false;
 const $=id=>document.getElementById(id);
+function setRunning(on){$('run').disabled=on;$('stop').disabled=!on;$('kill').disabled=!on;$('run').textContent=on?'▶ Running…':'▶ Run';}
 async function loadPresets(){
   PRESETS=await (await fetch('/presets')).json();
   const sel=$('preset'); sel.innerHTML='';
@@ -95,7 +102,7 @@ function finalize(i,state){
   else if(state==='err'){p.className='pill err';p.textContent='error';}
   else{p.className='pill idle';p.textContent='killed';}
   r.tps=0; agg();
-  if(Object.values(R).every(x=>x.final)) renderSummary();
+  if(Object.values(R).every(x=>x.final)){setRunning(false); renderSummary();}
 }
 function onEvent(ev){
   const i=ev.run, r=R[i]; if(!r)return; const out=$('out'+i),p=$('p'+i);
@@ -147,7 +154,7 @@ Recipe by @Tech2Wild`;
 $('copybtn').onclick=()=>{const t=$('share')?$('share').textContent:'';navigator.clipboard.writeText(t).then(()=>{$('copybtn').textContent='✓ Copied';setTimeout(()=>$('copybtn').textContent='📋 Copy for sharing',1500);});};
 
 $('run').onclick=async ()=>{
-  if(CTRL)CTRL.abort(); CTRL=new AbortController();
+  if(CTRL)CTRL.abort(); CTRL=new AbortController(); setRunning(true);
   const c=cur(), n=Math.max(1,Math.min(32,+$('par').value));
   const g=$('grid'); g.innerHTML=''; for(const k in R)delete R[k];
   PEAK=0; RUN_T0=performance.now(); SUMMED=false; META={model:c.model, hw:$('preset').value.replace(/\s*\(.*$/,'').trim()||'local'};
@@ -165,7 +172,7 @@ $('run').onclick=async ()=>{
 };
 async function killAll(){
   try{await fetch('/kill');}catch{}
-  if(CTRL)CTRL.abort(); if(HWTIMER)clearInterval(HWTIMER);
+  if(CTRL)CTRL.abort(); if(HWTIMER)clearInterval(HWTIMER); setRunning(false);
   for(const k in R){if(!R[k].final)finalize(k,'killed');}
   renderSummary();
 }
@@ -184,5 +191,5 @@ async function pollHw(c){
     $('hw').innerHTML=html;
   }catch{}
 }
-loadPresets();
+loadPresets(); setRunning(false);
 </script></body></html>
