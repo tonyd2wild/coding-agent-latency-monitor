@@ -1,0 +1,4 @@
+{
+  "_comment": "OPTIONAL: real per-GPU util/mem/temp via SSH. Key = a substring of the endpoint host; value = [user@host, path-to-ssh-key]. Requires passwordless SSH + nvidia-smi on that host. Leave file absent to just use vLLM /metrics.",
+  "192.0.2.10": ["user@192.0.2.10", "~/.ssh/id_ed25519"]
+}

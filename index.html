@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coding Agent Latency Monitor</title>
+<style>
+  :root{--bg:#0b0e14;--panel:#121620;--card:#161b26;--edge:#232a38;--ink:#e6edf3;--dim:#8b97a7;
+        --teal:#2dd4bf;--org:#f5a524;--pur:#a78bfa;--grn:#34d399;--red:#f87171;--blue:#60a5fa}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);
+    font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--edge)}
+  h1{font-size:16px;margin:0;font-weight:700}
+  .meta{color:var(--dim);font-size:12px} .meta b{color:var(--ink);font-weight:600}
+  .cfg{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  .cfg label{color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px}
+  input,select{background:var(--card);border:1px solid var(--edge);color:var(--ink);border-radius:6px;padding:5px 7px;font:12px ui-monospace,monospace}
+  input.prompt{width:240px} input.num{width:66px}
+  button{border:none;border-radius:7px;padding:8px 16px;font-weight:700;cursor:pointer}
+  #run{background:var(--grn);color:#04120c} #stop{background:var(--card);color:var(--ink);border:1px solid var(--edge)}
+  #kill{background:var(--red);color:#1a0505;font-weight:800}
+  .bar{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--edge)}
+  .total{background:#0e2a26;color:var(--teal);border:1px solid #164e46;border-radius:8px;padding:5px 12px;font-weight:700}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;padding:14px 16px}
+  .rc{background:var(--card);border:1px solid var(--edge);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .rc h3{margin:0;padding:9px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--edge)}
+  .pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .pill.idle{background:#1e2532;color:var(--dim)} .pill.think{background:#241f3a;color:var(--pur)}
+  .pill.answer{background:#0e2a26;color:var(--teal)} .pill.done{background:#12261a;color:var(--grn)} .pill.err{background:#2a1414;color:var(--red)}
+  .m4{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge)}
+  .m{background:var(--card);padding:7px 9px} .m .k{color:var(--dim);font-size:10px} .m .v{font-size:16px;font-weight:700}
+  .ttft .v{color:var(--teal)} .tps .v{color:var(--pur)} .e2e .v{color:var(--org)} .tok .v{color:var(--ink)}
+  pre{margin:0;padding:9px 12px;height:150px;overflow:auto;white-space:pre-wrap;color:#c3ccd8;font-size:11.5px;background:#0d1119}
+  #hw{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--edge);border-top:1px solid var(--edge)}
+  .hw{background:#160f14;padding:10px 14px} .hw .k{color:var(--dim);font-size:10px} .hw .v{font-size:14px;font-weight:700;color:var(--red)}
+  .sec{padding:8px 16px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
+  #summary{padding:0 16px 20px}
+  .stiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+  .st{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:11px 13px}
+  .st .k{color:var(--dim);font-size:10px;text-transform:uppercase} .st .v{font-size:22px;font-weight:800;margin-top:3px}
+  .st .u{color:var(--dim);font-size:11px;font-weight:400}
+  #share{width:100%;background:#0d1119;border:1px solid var(--edge);border-radius:10px;color:#cbd5e1;padding:12px;white-space:pre-wrap;font-size:12px}
+  #copybtn{background:var(--blue);color:#04121f;margin-top:8px}
+</style></head>
+<body>
+<header>
+  <h1>⚡ Coding Agent Latency Monitor</h1>
+  <span class="meta">Model: <b id="mLabel">—</b> · Endpoint: <b id="mEp">—</b></span>
+  <div class="cfg">
+    <label>Endpoint<select id="preset"></select></label>
+    <label>Prompt<input class="prompt" id="prompt" value="Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML."></label>
+    <label>Parallel<input class="num" id="par" type="number" value="6" min="1" max="32"></label>
+    <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
+    <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
+    <label>Think<select id="think"><option value="0" selected>off</option><option value="1">on</option></select></label>
+    <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button>
+  </div>
+</header>
+<div class="bar"><span class="sec" style="padding:0">Streaming Outputs</span><span class="total" id="total">Total live 0.0 tok/s</span></div>
+<div id="grid"></div>
+<div class="sec">Hardware Metrics</div>
+<div id="hw"></div>
+<div class="sec" id="sumhdr" style="display:none">Run Summary <button id="copybtn" style="padding:5px 12px">📋 Copy for sharing</button></div>
+<div id="summary" style="display:none"></div>
+
+<script>
+let CTRL=null, HWTIMER=null, PRESETS={}, PEAK=0, RUN_T0=0, META={}, SUMMED=false;
+const $=id=>document.getElementById(id);
+async function loadPresets(){
+  PRESETS=await (await fetch('/presets')).json();
+  const sel=$('preset'); sel.innerHTML='';
+  Object.keys(PRESETS).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);});
+  syncLabel();
+}
+function cur(){const [ep,model]=PRESETS[$('preset').value].split('|');return {ep,model};}
+function syncLabel(){const c=cur();$('mLabel').textContent=c.model;$('mEp').textContent=c.ep;}
+$('preset').addEventListener('change',syncLabel);
+
+function card(i){
+  const el=document.createElement('div');el.className='rc';el.id='rc'+i;
+  el.innerHTML=`<h3>Run ${i} <span class="pill think" id="p${i}">thinking</span></h3>
+    <div class="m4">
+      <div class="m ttft"><div class="k">TTFT</div><div class="v" id="ttft${i}">—</div></div>
+      <div class="m tps"><div class="k">Live tok/s</div><div class="v" id="tps${i}">—</div></div>
+      <div class="m e2e"><div class="k">E2E</div><div class="v" id="e2e${i}">—</div></div>
+      <div class="m tok"><div class="k">Tokens</div><div class="v" id="tok${i}">0</div></div>
+    </div><pre id="out${i}"></pre>`;
+  return el;
+}
+const R={};
+function agg(){let s=0;for(const k in R)s+=R[k].tps||0; if(s>PEAK)PEAK=s; $('total').textContent=`Total live ${s.toFixed(1)} tok/s`;}
+
+function finalize(i,state){
+  const r=R[i]; if(!r||r.final)return; r.final=true;
+  r.e2eS=(performance.now()-r.t0)/1000; r.finalTokens=r.usageTok||Math.round(r.chars/4);
+  const p=$('p'+i);
+  if(state==='done'){p.className='pill done';p.textContent='done';$('e2e'+i).textContent=r.e2eS.toFixed(1)+'s';}
+  else if(state==='err'){p.className='pill err';p.textContent='error';}
+  else{p.className='pill idle';p.textContent='killed';}
+  r.tps=0; agg();
+  if(Object.values(R).every(x=>x.final)) renderSummary();
+}
+function onEvent(ev){
+  const i=ev.run, r=R[i]; if(!r)return; const out=$('out'+i),p=$('p'+i);
+  if(ev.err){out.textContent='⚠ '+ev.err; finalize(i,'err'); return;}
+  if(ev.killed){finalize(i,'killed'); return;}
+  if(ev.done){finalize(i,'done'); return;}
+  const delta=ev.c||'';
+  if(delta){ if(r.tFirst===null){r.tFirst=performance.now();r.ttftS=(r.tFirst-r.t0)/1000;$('ttft'+i).textContent=r.ttftS.toFixed(2)+'s';p.className='pill answer';p.textContent='answering';}
+    r.chars+=delta.length; r.txt+=delta; if(r.txt.length<20000){out.textContent=r.txt;out.scrollTop=out.scrollHeight;} }
+  if(ev.u)r.usageTok=ev.u;
+  if(r.tFirst){const est=r.usageTok||Math.round(r.chars/4),dt=(performance.now()-r.tFirst)/1000||1;
+    r.tps=est/dt; if(r.tps>(r.peakTps||0))r.peakTps=r.tps; $('tps'+i).textContent=r.tps.toFixed(1); $('tok'+i).textContent=est; agg();}
+}
+
+function renderSummary(){
+  if(SUMMED)return; SUMMED=true;
+  const runs=Object.values(R).filter(r=>r.finalTokens>0);
+  if(!runs.length){return;}
+  const tpss=runs.map(r=>r.peakTps||0), toks=runs.map(r=>r.finalTokens||0);
+  const ttfts=runs.map(r=>r.ttftS).filter(x=>x!=null), e2es=runs.map(r=>r.e2eS).filter(x=>x!=null);
+  const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  const hi=Math.max(...tpss), lo=Math.min(...tpss), av=mean(tpss);
+  const totalTok=toks.reduce((x,y)=>x+y,0);
+  const wall=(performance.now()-RUN_T0)/1000;
+  const combined=totalTok/wall;
+  const st=(k,v,u)=>`<div class="st"><div class="k">${k}</div><div class="v">${v}<span class="u"> ${u||''}</span></div></div>`;
+  $('summary').innerHTML=`<div class="stiles">
+    ${st('Peak aggregate',PEAK.toFixed(1),'tok/s')}
+    ${st('Combined avg',combined.toFixed(1),'tok/s')}
+    ${st('Per-stream high',hi.toFixed(1),'tok/s')}
+    ${st('Per-stream low',lo.toFixed(1),'tok/s')}
+    ${st('Per-stream avg',av.toFixed(1),'tok/s')}
+    ${st('Total tokens',totalTok.toLocaleString(),'')}
+    ${st('Avg TTFT',mean(ttfts).toFixed(2),'s')}
+    ${st('Avg E2E',mean(e2es).toFixed(1),'s')}
+    ${st('Parallel',runs.length,'runs')}
+    ${st('Wall time',wall.toFixed(1),'s')}
+  </div><pre id="share"></pre>`;
+  const share=
+`🚀 ${META.model} on ${META.hw} — ${runs.length} parallel coding agents
+• Total: ${totalTok.toLocaleString()} tokens in ${wall.toFixed(0)}s
+• Aggregate: ${PEAK.toFixed(1)} tok/s peak · ${combined.toFixed(1)} tok/s sustained
+• Per-stream: ${hi.toFixed(1)} high / ${lo.toFixed(1)} low / ${av.toFixed(1)} avg tok/s
+• TTFT ${mean(ttfts).toFixed(2)}s avg · E2E ${mean(e2es).toFixed(0)}s avg
+Recipe by @Tech2Wild`;
+  $('share').textContent=share;
+  $('sumhdr').style.display='flex'; $('summary').style.display='block';
+}
+$('copybtn').onclick=()=>{const t=$('share')?$('share').textContent:'';navigator.clipboard.writeText(t).then(()=>{$('copybtn').textContent='✓ Copied';setTimeout(()=>$('copybtn').textContent='📋 Copy for sharing',1500);});};
+
+$('run').onclick=async ()=>{
+  if(CTRL)CTRL.abort(); CTRL=new AbortController();
+  const c=cur(), n=Math.max(1,Math.min(32,+$('par').value));
+  const g=$('grid'); g.innerHTML=''; for(const k in R)delete R[k];
+  PEAK=0; RUN_T0=performance.now(); SUMMED=false; META={model:c.model, hw:$('preset').value.replace(/\s*\(.*$/,'').trim()||'local'};
+  $('sumhdr').style.display='none'; $('summary').style.display='none';
+  for(let i=1;i<=n;i++){g.appendChild(card(i));R[i]={t0:performance.now(),tFirst:null,chars:0,usageTok:null,txt:'',tps:0,peakTps:0,ttftS:null,e2eS:null,finalTokens:0,final:false};}
+  if(HWTIMER)clearInterval(HWTIMER); pollHw(c); HWTIMER=setInterval(()=>pollHw(c),3000);
+  const url=`/runall?ep=${encodeURIComponent(c.ep)}&model=${encodeURIComponent(c.model)}&prompt=${encodeURIComponent($('prompt').value)}&max_tokens=${$('mx').value}&temp=${$('temp').value}&think=${$('think').value}&n=${n}`;
+  try{
+    const r=await fetch(url,{signal:CTRL.signal}); const rd=r.body.getReader(),dec=new TextDecoder(); let buf='';
+    while(true){const {done,value}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+      let nl; while((nl=buf.indexOf('\n\n'))>=0){const blk=buf.slice(0,nl); buf=buf.slice(nl+2);
+        const dl=blk.split('\n').find(l=>l.startsWith('data:')); if(!dl)continue;
+        try{onEvent(JSON.parse(dl.slice(5).trim()))}catch{}}}
+  }catch(e){if(!CTRL.signal.aborted)console.error(e);}
+};
+async function killAll(){
+  try{await fetch('/kill');}catch{}
+  if(CTRL)CTRL.abort(); if(HWTIMER)clearInterval(HWTIMER);
+  for(const k in R){if(!R[k].final)finalize(k,'killed');}
+  renderSummary();
+}
+$('stop').onclick=killAll; $('kill').onclick=killAll;
+
+async function pollHw(c){
+  try{const h=await (await fetch('/hw?ep='+encodeURIComponent(c.ep))).json();
+    let html='';
+    if(h.gpus&&h.gpus.length){h.gpus.forEach(g=>{const pct=(+g.total>0)?Math.round(100*g.used/g.total):0;const hot=(+g.temp>=80);
+      html+=`<div class="hw"><div class="k">GPU ${g.i} · ${g.temp||'?'}°C</div><div class="v" style="${hot?'color:#fca5a5':''}">${g.util}% · ${g.used}/${g.total}MiB (${pct}%)</div></div>`;});
+      if(h.ram)html+=`<div class="hw"><div class="k">System RAM used</div><div class="v">${h.ram} GiB</div></div>`;}
+    html+=`<div class="hw"><div class="k">Req running</div><div class="v">${h.running??'—'}</div></div>
+      <div class="hw"><div class="k">Req waiting</div><div class="v">${h.waiting??'—'}</div></div>
+      <div class="hw"><div class="k">GPU KV used</div><div class="v">${h.gpu_cache!=null?h.gpu_cache+'%':'—'}</div></div>
+      <div class="hw"><div class="k">Model</div><div class="v" style="color:var(--blue);font-size:12px">${c.model}</div></div>`;
+    $('hw').innerHTML=html;
+  }catch{}
+}
+loadPresets();
+</script></body></html>

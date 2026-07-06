@@ -1,0 +1,5 @@
+presets.json
+nodes.json
+__pycache__/
+*.pyc
+/tmp/

@@ -1,0 +1,4 @@
+{
+  "Local vLLM (:8000)": "http://localhost:8000/v1|your-model-name",
+  "Remote box (:8010)": "http://192.0.2.10:8010/v1|another-model"
+}
