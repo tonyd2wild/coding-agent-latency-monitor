@@ -20,7 +20,8 @@
   button:disabled{opacity:.35;cursor:not-allowed;filter:grayscale(.35)}
   #run{background:var(--grn);color:#04120c} #stop{background:var(--card);color:var(--ink);border:1px solid var(--edge)}
   #kill{background:var(--red);color:#1a0505;font-weight:800}
-  #kill:not(:disabled){animation:killpulse 1.5s ease-in-out infinite}
+  #clear{background:var(--card);color:var(--dim);border:1px solid var(--edge)}
+  body.running #kill{animation:killpulse 1.5s ease-in-out infinite}
   @keyframes killpulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0)}50%{box-shadow:0 0 0 5px rgba(248,113,113,.22)}}
   .bar{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--edge)}
   .total{background:#0e2a26;color:var(--teal);border:1px solid #164e46;border-radius:8px;padding:5px 12px;font-weight:700}
@@ -56,7 +57,7 @@
     <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
     <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
     <label>Think<select id="think"><option value="0" selected>off</option><option value="1">on</option></select></label>
-    <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button>
+    <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button><button id="clear">🧹 Clear</button>
   </div>
 </header>
 <div class="bar"><span class="sec" style="padding:0">Streaming Outputs</span><span class="total" id="total">Total live 0.0 tok/s</span></div>
@@ -69,7 +70,7 @@
 <script>
 let CTRL=null, HWTIMER=null, PRESETS={}, PEAK=0, RUN_T0=0, META={}, SUMMED=false;
 const $=id=>document.getElementById(id);
-function setRunning(on){$('run').disabled=on;$('stop').disabled=!on;$('kill').disabled=!on;$('run').textContent=on?'▶ Running…':'▶ Run';}
+function setRunning(on){$('run').disabled=on;$('stop').disabled=!on;document.body.classList.toggle('running',on);$('run').textContent=on?'▶ Running…':'▶ Run';}
 async function loadPresets(){
   PRESETS=await (await fetch('/presets')).json();
   const sel=$('preset'); sel.innerHTML='';
@@ -178,6 +179,15 @@ async function killAll(){
   renderSummary();
 }
 $('stop').onclick=killAll; $('kill').onclick=killAll;
+function clearAll(){
+  if(CTRL)CTRL.abort(); if(HWTIMER)clearInterval(HWTIMER); try{fetch('/kill');}catch{}
+  for(const k in R)delete R[k];
+  $('grid').innerHTML=''; $('hw').innerHTML=''; PEAK=0; SUMMED=false;
+  $('total').textContent='Total live 0.0 tok/s';
+  $('sumhdr').style.display='none'; $('summary').style.display='none';
+  setRunning(false);
+}
+$('clear').onclick=clearAll;
 
 async function pollHw(c){
   try{const h=await (await fetch('/hw?ep='+encodeURIComponent(c.ep))).json();
