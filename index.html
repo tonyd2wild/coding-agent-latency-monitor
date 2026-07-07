@@ -11,8 +11,12 @@
   .meta{color:var(--dim);font-size:12px} .meta b{color:var(--ink);font-weight:600}
   .cfg{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
   .cfg label{color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px}
-  input,select{background:var(--card);border:1px solid var(--edge);color:var(--ink);border-radius:6px;padding:5px 7px;font:12px ui-monospace,monospace}
-  input.prompt{width:240px} input.num{width:66px}
+  input,select,textarea{background:var(--card);border:1px solid var(--edge);color:var(--ink);border-radius:6px;padding:5px 7px;font:12px ui-monospace,monospace}
+  .prompt{width:240px} input.num{width:66px}
+  textarea.prompt{height:28px;min-height:28px;max-height:120px;resize:vertical;vertical-align:top}
+  input[type=checkbox]{accent-color:var(--teal);margin:0;padding:0}
+  #mixrow{display:none;flex-basis:100%;flex-wrap:wrap;gap:4px 12px;align-items:center;justify-content:flex-end}
+  .cfg #mixrow label{flex-direction:row;align-items:center;gap:5px;white-space:nowrap;cursor:pointer}
   button{border:none;border-radius:7px;padding:8px 16px;font-weight:700;cursor:pointer;
     transition:transform .07s ease,filter .15s ease,opacity .15s ease,box-shadow .2s ease}
   button:hover:not(:disabled){filter:brightness(1.15)}
@@ -100,13 +104,16 @@
   <span class="meta">Model: <b id="mLabel">—</b> · Endpoint: <b id="mEp">—</b></span>
   <div class="cfg">
     <label>Endpoint<select id="preset"></select></label>
-    <label>Prompt<input class="prompt" id="prompt" value="Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML."></label>
+    <label>Preset<select id="pprompt"></select></label>
+    <label>Prompt<textarea class="prompt" id="prompt" rows="1">Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML.</textarea></label>
+    <label>Mode<select id="pmode"><option value="single" selected>Single prompt</option><option value="mixed">Mixed presets</option></select></label>
     <label>Quant/note<input class="num" id="quant" style="width:104px" placeholder="Int4" value=""></label>
     <label>Parallel<input class="num" id="par" type="number" value="6" min="1" max="32"></label>
     <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
     <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
     <label>Think<select id="think"><option value="0" selected>off</option><option value="1">on</option></select></label>
     <button id="run">▶ Run</button><button id="stop">■ Stop</button><button id="kill">🛑 KILL ALL</button><button id="clear">🧹 Clear</button><button id="mtx">🟩 Matrix</button>
+    <div id="mixrow"></div>
   </div>
 </header>
 <div class="tabs">
@@ -156,6 +163,40 @@
 <script>
 let CTRL=null, HWTIMER=null, PRESETS={}, PEAK=0, RUN_T0=0, META={}, SUMMED=false;
 const $=id=>document.getElementById(id);
+
+// ---- Prompt preset library (Mixed Prompts feature) ----
+const PRESET_PROMPTS=[
+ {key:'game',label:'🎮 HTML5 Game',short:'🎮 Game',
+  prompt:'Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML.'},
+ {key:'json',label:'📦 JSON Generator',short:'📦 JSON',
+  prompt:'Generate a strict JSON dataset: an array of exactly 25 e-commerce product objects, each with fields id, name, brand, category, price, currency, in_stock, tags (array of 3 strings), and description (two sentences). Output ONLY valid JSON — no prose, no markdown fences, no comments.'},
+ {key:'narrative',label:'📖 Narrative',short:'📖 Story',
+  prompt:'Write a 600-word short story about a night-shift engineer who discovers her datacenter\'s cooling system is being quietly sabotaged. Include at least three exchanges of spoken dialogue between two characters, and end with a twist in the final paragraph.'},
+ {key:'reasoning',label:'🧠 Reasoning',short:'🧠 Reason',
+  prompt:'Solve this step by step, showing all working: A warehouse ships 3 truckloads on Monday, then each day ships 20% more truckloads than the previous day, rounded up to a whole truck. Each truck holds 48 crates and each crate holds 36 units. How many total units are shipped Monday through Friday? Lay out each day\'s calculation, then verify your arithmetic at the end.'},
+ {key:'refactor',label:'🔧 Code Refactor',short:'🔧 Refactor',
+  prompt:'Refactor this messy Python function into clean idiomatic code (clear names, type hints, no duplication, early returns), then write pytest unit tests covering normal, edge, and error cases:\n\ndef proc(d):\n    r = []\n    for i in range(len(d)):\n        if d[i] != None:\n            if type(d[i]) == dict:\n                if "price" in d[i].keys() and d[i]["price"] > 0:\n                    x = d[i]["price"]\n                    if d[i].get("disc"):\n                        x = x - x * d[i]["disc"] / 100.0\n                    r.append({"n": d[i].get("name", "unk"), "p": round(x, 2)})\n    t = 0\n    for e in r:\n        t = t + e["p"]\n    return (r, t)'},
+ {key:'sql',label:'🗄️ SQL',short:'🗄️ SQL',
+  prompt:'Given PostgreSQL tables orders(order_id, customer_id, order_date, status, total_cents), order_items(order_id, sku, qty, unit_price_cents), and customers(customer_id, region, signup_date), write ONE analytical query that returns, per region and per month over the last 12 months: total revenue, order count, unique customers, average order value, and month-over-month revenue growth percent. Use CTEs and window functions, then briefly explain what each CTE does.'},
+ {key:'agent',label:'🤖 Agent Plan',short:'🤖 Agent',
+  prompt:'You are an autonomous agent with tools web_search(query), read_file(path), write_file(path, content), and run_shell(cmd). Plan this task as a structured tool-call sequence: audit a Python repo for vulnerable dependencies and produce a patched requirements.txt plus a short findings report. Output numbered steps, each with the tool name, exact arguments, the expected output, and a fallback if that step fails.'},
+ {key:'techdoc',label:'📝 Tech Doc',short:'📝 Doc',
+  prompt:'Write complete API documentation in Markdown for POST /v1/inventory/reserve, an endpoint that reserves stock for a shopping cart. Request body: {cart_id, items:[{sku, qty}], ttl_seconds}; returns 200 with reservation_id and expires_at, or 409 when stock is insufficient. Include an overview, authentication, a parameters table, example request and response JSON, every error code, and rate-limit notes.'}
+];
+const DEFAULT_MIX=['game','json','narrative','reasoning'];
+function checkedMix(){return PRESET_PROMPTS.filter(p=>{const cb=document.querySelector('#mixrow input[data-key="'+p.key+'"]');return cb&&cb.checked;});}
+(function initPromptPresets(){
+  const sel=$('pprompt');
+  PRESET_PROMPTS.forEach(p=>{const o=document.createElement('option');o.value=p.key;o.textContent=p.label;sel.appendChild(o);});
+  sel.value='game';
+  sel.addEventListener('change',()=>{const p=PRESET_PROMPTS.find(x=>x.key===sel.value);if(p)$('prompt').value=p.prompt;});
+  const row=$('mixrow');
+  PRESET_PROMPTS.forEach(p=>{
+    const l=document.createElement('label');
+    const cb=document.createElement('input');cb.type='checkbox';cb.dataset.key=p.key;cb.checked=DEFAULT_MIX.includes(p.key);
+    l.appendChild(cb);l.appendChild(document.createTextNode(' '+p.label));row.appendChild(l);});
+  $('pmode').addEventListener('change',()=>{row.style.display=$('pmode').value==='mixed'?'flex':'none';});
+})();
 function setRunning(on){$('run').disabled=on;$('stop').disabled=!on;document.body.classList.toggle('running',on);$('run').textContent=on?'▶ Running…':'▶ Run';}
 async function loadPresets(){
   PRESETS=await (await fetch('/presets')).json();
@@ -167,9 +208,9 @@ function cur(){const [ep,model]=PRESETS[$('preset').value].split('|');return {ep
 function syncLabel(){const c=cur();$('mLabel').textContent=c.model;$('mEp').textContent=c.ep;}
 $('preset').addEventListener('change',syncLabel);
 
-function card(i){
+function card(i,tag){
   const el=document.createElement('div');el.className='rc';el.id='rc'+i;
-  el.innerHTML=`<h3>Run ${i} <span class="pill think" id="p${i}">thinking</span></h3>
+  el.innerHTML=`<h3>Run ${i}${tag?' · '+tag:''} <span class="pill think" id="p${i}">thinking</span></h3>
     <div class="m4">
       <div class="m ttft"><div class="k">TTFT</div><div class="v" id="ttft${i}">—</div></div>
       <div class="m tps"><div class="k">Live tok/s</div><div class="v" id="tps${i}">—</div></div>
@@ -235,25 +276,33 @@ function renderSummary(){
 • Aggregate: ${PEAK.toFixed(1)} tok/s peak · ${combined.toFixed(1)} tok/s sustained
 • Per-stream: ${hi.toFixed(1)} high / ${lo.toFixed(1)} low / ${av.toFixed(1)} avg tok/s
 • TTFT ${mean(ttfts).toFixed(2)}s avg · E2E ${mean(e2es).toFixed(0)}s avg
-Recipe by @Tech2Wild`;
+${META.mix?`• Mixed prompts: ${META.mix.labels.join(', ')}\n`:''}Recipe by @Tech2Wild`;
   $('share').textContent=share;
   $('sumhdr').style.display='flex'; $('summary').style.display='block';
-  saveRun({ts:new Date().toISOString(), model:META.model, quant:($('quant').value||'').trim(), cluster:META.hw,
+  const rec={ts:new Date().toISOString(), model:META.model, quant:($('quant').value||'').trim(), cluster:META.hw,
     parallel:runs.length, peak:+PEAK.toFixed(1), sustained:+combined.toFixed(1),
     hi:+hi.toFixed(1), lo:+lo.toFixed(1), avg:+av.toFixed(1),
-    ttft:+mean(ttfts).toFixed(2), e2e:+mean(e2es).toFixed(1), total:totalTok, wall:+wall.toFixed(1)});
+    ttft:+mean(ttfts).toFixed(2), e2e:+mean(e2es).toFixed(1), total:totalTok, wall:+wall.toFixed(1)};
+  if(META.mix)rec.mix=META.mix.keys;
+  saveRun(rec);
 }
 $('copybtn').onclick=()=>{const t=$('share')?$('share').textContent:'';navigator.clipboard.writeText(t).then(()=>{$('copybtn').textContent='✓ Copied';setTimeout(()=>$('copybtn').textContent='📋 Copy for sharing',1500);});};
 
 $('run').onclick=async ()=>{
+  const mixed=$('pmode').value==='mixed';
+  const mix=mixed?checkedMix():null;
+  if(mixed&&!mix.length){alert('Mixed presets: check at least one preset.');return;}
   if(CTRL)CTRL.abort(); CTRL=new AbortController(); setRunning(true);
   const c=cur(), n=Math.max(1,Math.min(32,+$('par').value));
   const g=$('grid'); g.innerHTML=''; for(const k in R)delete R[k];
-  PEAK=0; RUN_T0=performance.now(); SUMMED=false; META={model:c.model, hw:$('preset').value.replace(/\s*\(.*$/,'').trim()||'local'};
+  PEAK=0; RUN_T0=performance.now(); SUMMED=false;
+  META={model:c.model, hw:$('preset').value.replace(/\s*\(.*$/,'').trim()||'local',
+        mix:mix?{keys:mix.map(p=>p.key),labels:mix.map(p=>p.label)}:null};
   $('sumhdr').style.display='none'; $('summary').style.display='none';
-  for(let i=1;i<=n;i++){g.appendChild(card(i));R[i]={t0:performance.now(),tFirst:null,chars:0,usageTok:null,txt:'',tps:0,peakTps:0,ttftS:null,e2eS:null,finalTokens:0,final:false};}
+  for(let i=1;i<=n;i++){g.appendChild(card(i,mix?mix[(i-1)%mix.length].short:null));R[i]={t0:performance.now(),tFirst:null,chars:0,usageTok:null,txt:'',tps:0,peakTps:0,ttftS:null,e2eS:null,finalTokens:0,final:false};}
   if(HWTIMER)clearInterval(HWTIMER); pollHw(c); HWTIMER=setInterval(()=>pollHw(c),3000);
-  const url=`/runall?ep=${encodeURIComponent(c.ep)}&model=${encodeURIComponent(c.model)}&prompt=${encodeURIComponent($('prompt').value)}&max_tokens=${$('mx').value}&temp=${$('temp').value}&think=${$('think').value}&n=${n}`;
+  let url=`/runall?ep=${encodeURIComponent(c.ep)}&model=${encodeURIComponent(c.model)}&max_tokens=${$('mx').value}&temp=${$('temp').value}&think=${$('think').value}&n=${n}`;
+  url+=mix?`&prompts=${encodeURIComponent(JSON.stringify(mix.map(p=>p.prompt)))}`:`&prompt=${encodeURIComponent($('prompt').value)}`;
   try{
     const r=await fetch(url,{signal:CTRL.signal}); const rd=r.body.getReader(),dec=new TextDecoder(); let buf='';
     while(true){const {done,value}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});

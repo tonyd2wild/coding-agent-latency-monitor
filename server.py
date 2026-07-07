@@ -195,6 +195,17 @@ class H(BaseHTTPRequestHandler):
     def _runall(self, q):
         ep = q.get("ep", [""])[0]; model = q.get("model", ["?"])[0]
         prompt = q.get("prompt", ["Say hi."])[0]
+        # Optional mixed-prompt mode: prompts = JSON array of strings; run i (1-indexed)
+        # gets prompts[(i-1) % len(prompts)]. Falls back to `prompt` when absent/invalid.
+        prompts = None
+        raw_prompts = q.get("prompts", [""])[0]
+        if raw_prompts:
+            try:
+                pl = json.loads(raw_prompts)
+                if isinstance(pl, list) and pl and all(isinstance(x, str) for x in pl):
+                    prompts = pl
+            except Exception:
+                prompts = None
         mx = int(q.get("max_tokens", ["1024"])[0]); temp = float(q.get("temp", ["0.2"])[0])
         think = q.get("think", ["1"])[0] == "1"; n = max(1, min(32, int(q.get("n", ["6"])[0])))
         STOP.clear()
@@ -206,7 +217,8 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         evq = queue.Queue()
         for i in range(1, n + 1):
-            threading.Thread(target=stream_one, args=(i, ep, model, prompt, mx, temp, think, evq), daemon=True).start()
+            p_i = prompts[(i - 1) % len(prompts)] if prompts else prompt
+            threading.Thread(target=stream_one, args=(i, ep, model, p_i, mx, temp, think, evq), daemon=True).start()
         done = 0
         try:
             while done < n:
