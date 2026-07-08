@@ -43,10 +43,15 @@ CLOCK = threading.Lock()
 
 
 def stream_one(idx, ep, model, prompt, mx, temp, think, q):
+    ctk = {"enable_thinking": think}
+    # MiniMax-M3 uses its own thinking flag, not enable_thinking. Only send it to M3/MiniMax
+    # endpoints (sending it to other models errors them out).
+    if "minimax" in model.lower() or "m3" in model.lower():
+        ctk["thinking_mode"] = "enabled" if think else "disabled"
     body = {"model": model, "messages": [{"role": "user", "content": prompt}],
             "max_tokens": mx, "temperature": temp, "stream": True,
             "stream_options": {"include_usage": True},
-            "chat_template_kwargs": {"enable_thinking": think, "thinking_mode": ("enabled" if think else "disabled")}}
+            "chat_template_kwargs": ctk}
     r = None
     try:
         if STOP.is_set():
