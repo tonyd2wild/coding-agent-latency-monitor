@@ -46,7 +46,7 @@ def stream_one(idx, ep, model, prompt, mx, temp, think, q):
     body = {"model": model, "messages": [{"role": "user", "content": prompt}],
             "max_tokens": mx, "temperature": temp, "stream": True,
             "stream_options": {"include_usage": True},
-            "chat_template_kwargs": {"enable_thinking": think}}
+            "chat_template_kwargs": {"enable_thinking": think, "thinking_mode": ("enabled" if think else "disabled")}}
     r = None
     try:
         if STOP.is_set():
@@ -71,7 +71,10 @@ def stream_one(idx, ep, model, prompt, mx, temp, think, q):
             except Exception:
                 continue
             ch = (j.get("choices") or [{}])[0]
-            delta = (ch.get("delta") or {}).get("content") or ""
+            _dd = ch.get("delta") or {}
+            # reasoning models (M3, DS4, GLM) stream thinking in delta.reasoning with content=null;
+            # count those tokens too or the monitor shows nothing during the think phase
+            delta = (_dd.get("content") or "") or (_dd.get("reasoning") or "") or (_dd.get("reasoning_content") or "")
             u = (j.get("usage") or {}).get("completion_tokens")
             if delta or u:
                 q.put({"run": idx, "c": delta, "u": u})
