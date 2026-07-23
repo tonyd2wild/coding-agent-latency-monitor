@@ -1,5 +1,6 @@
 presets.json
 nodes.json
+fleet.json
 harness-profiles.json
 __pycache__/
 *.pyc
