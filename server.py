@@ -7,7 +7,7 @@ every upstream model connection shut, so vLLM aborts the requests instantly and 
 GPUs actually stop (v1/v2 Stop only cut the browser; the server kept generating → GPUs
 pinned). Also real per-node GPU%/RAM via SSH for the 3090.
 """
-import json, urllib.request, urllib.parse, os, threading, queue, subprocess, time
+import json, re, urllib.request, urllib.parse, os, threading, queue, subprocess, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "7900"))
@@ -68,32 +68,115 @@ STOP = threading.Event()          # set by /kill -> workers bail
 CONNS = []                        # live upstream responses (so /kill can slam them shut)
 CLOCK = threading.Lock()
 
-# ---- Live Fleet + Live Models (/api/fleet): every node + every up model, always moving ----
-_FLEET_TTL = 2.0                  # cache window so rapid polls don't spam SSH
+# ---- Live Fleet + Live Models (/api/fleet): every device + switch + every up model ----
+# The rich fleet is described by a gitignored fleet.json (see fleet.example.json):
+#   * per-DEVICE GPU nodes, each reached either DIRECT (ssh -i key user@host) or through
+#     an SSH ProxyJump bastion (ssh -i key -J jumpuser@jumphost user@innerhost),
+#   * an optional RouterOS/MikroTik SWITCH (temps + fabric ports over SSH, jump supported).
+# When fleet.json is absent we fall back to the simple nodes.json entries (direct only,
+# no switch) so existing setups keep their Live Fleet view. The /api/fleet response returns
+# one entry per device with a per-GPU list (so the UI renders a module per GPU), a switch
+# object, and the existing models list.
+_FLEET_TTL = 4.0                  # cache window; fleet SSH is slow, poll gently
 _FLEET_LOCK = threading.Lock()
 _FLEET_CACHE = {"ts": 0.0, "data": None}
 _SSH_OPTS = ["-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
              "-o", "ConnectTimeout=6", "-o", "StrictHostKeyChecking=no"]
 _NVIDIA_CMD = ("nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu "
                "--format=csv,noheader,nounits; echo ---; free -g | awk '/Mem:/{print $3\"/\"$2}'")
+_DEV_SSH_TIMEOUT = 12             # per-device ssh; jump-host round-trips are slow
+_SW_STMT_TIMEOUT = 10             # per RouterOS statement
+_SW_INTERVAL = 8.0                # switch refreshed at most this often (background, never blocks)
 
 
-def _probe_node(sub, hostspec, key, name, out):
-    """SSH one node for per-GPU util/mem/temp + RAM. Same commands/opts as _hw. Fills `out[sub]`;
-    leaves it as the pre-seeded offline stub on any failure so unreachable nodes still render."""
-    node = {"name": name, "host": hostspec.split("@")[-1], "gpus": [], "ram": None, "up": False}
+def _expand_key(k):
+    return os.path.expanduser(k) if k else k
+
+
+def _load_fleet():
+    """Build (DEVICES, SWITCH) from fleet.json, or fall back to nodes.json (direct devices,
+    no switch). A device is: name, hostspec(user@host), key, optional jump ("juser@jhost"),
+    optional port, temp thresholds. SWITCH mirrors that plus a ports list."""
+    raw = _load_json("fleet.json", None)
+    if not raw:
+        devices = []
+        for sub, (hs, ky, nm) in NODES.items():
+            devices.append({"name": nm, "host": hs.split("@")[-1], "hostspec": hs,
+                            "key": ky, "jump": None, "port": None,
+                            "temp_warn": 65, "temp_hot": 80})
+        return devices, None
+    default_key = _expand_key((raw.get("ssh") or {}).get("default_key") or "~/.ssh/id_ed25519")
+    devices = []
+    for d in (raw.get("devices") or []):
+        if not isinstance(d, dict) or not d.get("host") or str(d.get("name", "")).startswith("_"):
+            continue
+        user = d.get("user")
+        host = d["host"]
+        hostspec = "%s@%s" % (user, host) if user else host
+        devices.append({
+            "name": d.get("name") or host,
+            "host": host, "hostspec": hostspec,
+            "key": _expand_key(d.get("ssh_key") or default_key),
+            "jump": d.get("jump"),            # "jumpuser@jumphost" -> ssh ProxyJump, or None
+            "jump_key": _expand_key(d["jump_key"]) if d.get("jump_key") else None,  # separate key for the bastion hop
+            "port": d.get("port"),
+            "temp_warn": d.get("temp_warn", 65), "temp_hot": d.get("temp_hot", 80),
+        })
+    sw_raw = raw.get("switch")
+    switch = None
+    if isinstance(sw_raw, dict) and sw_raw.get("host"):
+        su = sw_raw.get("user", "admin")
+        switch = {
+            "name": sw_raw.get("name", "Fabric Switch"),
+            "host": sw_raw["host"], "hostspec": "%s@%s" % (su, sw_raw["host"]),
+            "key": _expand_key(sw_raw.get("ssh_key") or default_key),
+            "jump": sw_raw.get("jump"), "port": sw_raw.get("port"),
+            "ports": sw_raw.get("ports") or [],   # fabric interfaces to show; [] = auto-detect running
+            "temp_warn": sw_raw.get("temp_warn", 55),
+            "temp_hot": sw_raw.get("temp_hot", 70),
+        }
+    return devices, switch
+
+
+DEVICES, SWITCH = _load_fleet()
+
+
+def _dev_ssh(dev, remote):
+    """ssh argv for a device: identity + opts, optional -p port, optional -J ProxyJump bastion."""
+    flags = ["ssh", "-i", dev["key"]] + _SSH_OPTS
+    if dev.get("port"):
+        flags += ["-p", str(dev["port"])]
+    if dev.get("jump"):
+        # NESTED bastion: ssh into the jump host (with jump_key if given, else the device key),
+        # which then ssh's to the inner host using ITS OWN reachability (a jump host on the same
+        # LAN as gated cluster nodes reaches them directly). The inner remote command is quoted so
+        # the bastion runs it verbatim on the inner node. This is how clusters expose Tailscale-gated
+        # nodes behind one reachable bastion. Optional inner_key = a key that lives ON the bastion.
+        jflags = ["ssh", "-i", dev.get("jump_key") or dev["key"]] + _SSH_OPTS
+        inner_i = ("-i %s " % dev["inner_key"]) if dev.get("inner_key") else ""
+        inner = ("ssh -o BatchMode=yes -o ConnectTimeout=6 -o StrictHostKeyChecking=no %s%s %s"
+                 % (inner_i, dev["hostspec"], json.dumps(remote)))
+        return jflags + [dev["jump"], inner]
+    return flags + [dev["hostspec"], remote]
+
+
+def _probe_device(dev, out, i):
+    """SSH one device for per-GPU util/mem/temp + RAM. Fills out[i]; leaves the pre-seeded
+    offline stub on any failure so unreachable devices still render (dimmed)."""
+    node = out[i]
     try:
-        r = subprocess.run(["ssh", "-i", key] + _SSH_OPTS + [hostspec, _NVIDIA_CMD],
-                           capture_output=True, text=True, timeout=10)
+        r = subprocess.run(_dev_ssh(dev, _NVIDIA_CMD),
+                           capture_output=True, text=True, timeout=_DEV_SSH_TIMEOUT)
         gsec, _, rsec = r.stdout.partition("---")
+        gpus = []
         for ln in gsec.strip().splitlines():
             p = [x.strip() for x in ln.split(",")]
             if len(p) == 5:
-                node["gpus"].append({"i": p[0], "util": p[1], "used": p[2], "total": p[3], "temp": p[4]})
+                gpus.append({"i": p[0], "util": p[1], "used": p[2], "total": p[3], "temp": p[4]})
+        node["gpus"] = gpus
         node["ram"] = rsec.strip() or None
-        if node["gpus"] or node["ram"]:
+        if gpus or node["ram"]:
             node["up"] = True
-            out[sub] = node
     except Exception:
         pass
 
@@ -125,20 +208,192 @@ def _probe_model(name, ep, out):
     out[ep] = m
 
 
+# ---- Optional fabric switch (RouterOS/MikroTik over SSH, ProxyJump supported). READ-ONLY. ----
+# Every statement only QUERIES state (`print` / `monitor once`); nothing reconfigures anything.
+# The switch is refreshed on a slow background cadence so a slow jump-host round-trip NEVER
+# blocks /api/fleet; the snapshot always attaches the most recent reading.
+_SW_LOCK = threading.Lock()
+_SW_STATE = {"ts": 0.0, "data": None, "busy": False}
+_iface_prev = {}    # port -> (ts, rx_bytes, tx_bytes) for throughput deltas
+_port_rate = {}     # port -> "100Gbps" (static link rate, fetched once)
+
+
+def _switch_ssh(sw, statement):
+    flags = ["ssh", "-i", sw["key"]] + _SSH_OPTS
+    if sw.get("port"):
+        flags += ["-p", str(sw["port"])]
+    if sw.get("jump"):
+        flags += ["-J", sw["jump"]]
+    return flags + [sw["hostspec"], statement]
+
+
+def _sw_offline(sw, err=None):
+    return {"name": sw["name"], "up": False, "err": err, "temp": None, "cpu_temp": None,
+            "cpu_load": None, "uptime": None, "version": None, "ports": [],
+            "temp_warn": sw["temp_warn"], "temp_hot": sw["temp_hot"]}
+
+
+def _sw_float(v):
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+def _parse_health(text):
+    """`/system health print` value rows: "  #  NAME  VALUE  TYPE"."""
+    h = {}
+    for line in text.splitlines():
+        mm = re.match(r"\s*\d+\s+([a-z0-9\-]+)\s+([0-9.]+|ok|fail|critical|warning)\b", line)
+        if mm:
+            h[mm.group(1)] = mm.group(2)
+    return h
+
+
+def _parse_resource(text):
+    """`/system resource print` "key: value" rows."""
+    r = {}
+    for line in text.splitlines():
+        mm = re.match(r"\s*([a-z0-9\-]+):\s+(.+?)\s*$", line)
+        if mm:
+            r[mm.group(1)] = mm.group(2).strip()
+    return r
+
+
+def _parse_iface_stats(text):
+    """`/interface print stats` rows -> {name: (rx_bytes, tx_bytes)}. RouterOS uses single-space
+    thousands separators inside counters and 2+ spaces between columns."""
+    out = {}
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or not s[0].isdigit():
+            continue
+        m = re.match(r"\d+\s+(?:[A-Z]{1,3}\s+)?([A-Za-z][\w\-]*)\s+(.*)$", s)
+        if not m:
+            continue
+        cols = re.split(r"\s{2,}", m.group(2).strip())
+        vals = [int(c.replace(" ", "")) for c in cols if c.replace(" ", "").isdigit()]
+        if len(vals) >= 2:
+            out[m.group(1)] = (vals[0], vals[1])
+    return out
+
+
+def _poll_switch(sw):
+    """One switch cycle: health (temps) -> resource (cpu/uptime/version) -> per-port throughput."""
+    res = _sw_offline(sw)
+    to = _SW_STMT_TIMEOUT
+    try:
+        r = subprocess.run(_switch_ssh(sw, "/system health print"),
+                           capture_output=True, text=True, timeout=to)
+    except Exception as e:
+        res["err"] = str(e)[:140]
+        return res
+    if r.returncode != 0 or "NAME" not in r.stdout:
+        res["err"] = (r.stderr or r.stdout or "switch unreachable").strip()[:140]
+        return res
+    h = _parse_health(r.stdout)
+    res["up"] = True
+    res["temp"] = _sw_float(h.get("switch-temperature") or h.get("board-temperature1") or h.get("temperature"))
+    res["cpu_temp"] = _sw_float(h.get("cpu-temperature"))
+    try:
+        r = subprocess.run(_switch_ssh(sw, "/system resource print"),
+                           capture_output=True, text=True, timeout=to)
+        if r.returncode == 0 and "version" in r.stdout:
+            rr = _parse_resource(r.stdout)
+            res["cpu_load"] = rr.get("cpu-load")
+            res["uptime"] = rr.get("uptime")
+            v = rr.get("version")
+            res["version"] = v.split(" ")[0] if v else None
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(_switch_ssh(sw, "/interface print stats where running"),
+                           capture_output=True, text=True, timeout=to)
+        stats = _parse_iface_stats(r.stdout) if r.returncode == 0 else {}
+    except Exception:
+        stats = {}
+    now = time.time()
+    names = sw["ports"] or list(stats.keys())
+    ports = []
+    for p in names:
+        d = stats.get(p)
+        entry = {"name": p, "running": d is not None, "rx_bps": 0, "tx_bps": 0,
+                 "rate": _port_rate.get(p)}
+        if d:
+            rx, tx = d
+            prev = _iface_prev.get(p)
+            if prev:
+                dt = now - prev[0]
+                if dt > 0:
+                    entry["rx_bps"] = max(0, (rx - prev[1]) * 8 / dt)
+                    entry["tx_bps"] = max(0, (tx - prev[2]) * 8 / dt)
+            _iface_prev[p] = (now, rx, tx)
+        ports.append(entry)
+    # fetch one running port's static link rate per cycle (never hammer the switch)
+    for entry in ports:
+        if entry["running"] and _port_rate.get(entry["name"]) is None:
+            try:
+                r2 = subprocess.run(_switch_ssh(sw, "/interface ethernet monitor %s once" % entry["name"]),
+                                    capture_output=True, text=True, timeout=to)
+                if r2.returncode == 0:
+                    rm = re.search(r"\brate:\s*([0-9A-Za-z]+)", r2.stdout)
+                    if rm:
+                        _port_rate[entry["name"]] = rm.group(1)
+                        entry["rate"] = rm.group(1)
+            except Exception:
+                pass
+            break
+    res["ports"] = ports
+    return res
+
+
+def _switch_refresh_bg(sw):
+    try:
+        data = _poll_switch(sw)
+    except Exception as e:
+        data = _sw_offline(sw, str(e)[:140])
+    with _SW_LOCK:
+        _SW_STATE["data"] = data
+        _SW_STATE["ts"] = time.time()
+        _SW_STATE["busy"] = False
+
+
+def _maybe_refresh_switch():
+    """Return the latest switch snapshot immediately; kick a background refresh if it's due.
+    Never blocks the caller (switch SSH through a bastion can take several seconds)."""
+    if not SWITCH:
+        return None
+    now = time.time()
+    with _SW_LOCK:
+        if _SW_STATE["data"] is None:
+            _SW_STATE["data"] = _sw_offline(SWITCH, "warming up")
+        cur = _SW_STATE["data"]
+        if (now - _SW_STATE["ts"]) >= _SW_INTERVAL and not _SW_STATE["busy"]:
+            _SW_STATE["busy"] = True
+            threading.Thread(target=_switch_refresh_bg, args=(SWITCH,), daemon=True).start()
+    return cur
+
+
 def _fleet_snapshot():
-    """Poll ALL nodes + all unique preset endpoints in parallel (short timeouts), cached ~2s."""
+    """Poll ALL devices (direct or via ProxyJump) + unique preset endpoints in parallel, attach the
+    latest switch reading, cached ~4s. Devices/switch that are unreachable render as offline stubs."""
     now = time.time()
     with _FLEET_LOCK:
         c = _FLEET_CACHE
         if c["data"] is not None and (now - c["ts"]) < _FLEET_TTL:
             return c["data"]
-    # nodes: pre-seed offline stubs so timed-out/unreachable hosts still appear (dimmed)
-    node_out = {sub: {"name": nm, "host": hs.split("@")[-1], "gpus": [], "ram": None, "up": False}
-                for sub, (hs, ky, nm) in NODES.items()}
+    # devices: pre-seed offline stubs so timed-out/unreachable hosts still appear (dimmed)
+    dev_out = {}
+    for i, dev in enumerate(DEVICES):
+        dev_out[i] = {"name": dev["name"], "host": dev["host"], "gpus": [], "ram": None,
+                      "up": False, "jump": bool(dev.get("jump")),
+                      "temp_warn": dev["temp_warn"], "temp_hot": dev["temp_hot"]}
     threads = []
-    for sub, (hs, ky, nm) in NODES.items():
-        t = threading.Thread(target=_probe_node, args=(sub, hs, ky, nm, node_out), daemon=True)
+    for i, dev in enumerate(DEVICES):
+        t = threading.Thread(target=_probe_device, args=(dev, dev_out, i), daemon=True)
         t.start(); threads.append(t)
+    # switch: non-blocking; attach whatever the background poller has (kicks a refresh if due)
+    switch = _maybe_refresh_switch()
     # models: one probe per UNIQUE endpoint (split preset value on '|')
     eps = {}
     for val in PRESETS.values():
@@ -152,11 +407,13 @@ def _fleet_snapshot():
         t = threading.Thread(target=_probe_model, args=(mname, ep, model_out), daemon=True)
         t.start(); mthreads.append(t)
     for t in threads:
-        t.join(timeout=11)
+        t.join(timeout=_DEV_SSH_TIMEOUT + 2)
     for t in mthreads:
         t.join(timeout=5)
-    data = {"nodes": [node_out[s] for s in NODES], "models": list(model_out.values()),
-            "ts": int(now)}
+    devices = [dev_out[i] for i in range(len(DEVICES))]
+    # keep "nodes" as an alias of "devices" for backward compatibility with older clients
+    data = {"devices": devices, "nodes": devices, "switch": switch,
+            "models": list(model_out.values()), "ts": int(now)}
     with _FLEET_LOCK:
         _FLEET_CACHE["data"] = data
         _FLEET_CACHE["ts"] = time.time()

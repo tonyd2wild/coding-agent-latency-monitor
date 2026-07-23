@@ -1,0 +1,48 @@
+{
+  "_comment": "OPTIONAL rich, config-driven Live Fleet. Copy to fleet.json (git-ignored) and fill in your OWN hosts/keys. Each device renders as a header + one module PER GPU. A device is reached DIRECT (ssh -i key user@host) or through a BASTION (add \"jump\": \"jumpuser@jumphost\"). Bastion mode is NESTED: the app ssh's into the jump host, which then ssh's to the inner host using ITS OWN reachability (a bastion on the same LAN as gated cluster nodes reaches them directly), so you only need to reach the bastion. Optional \"jump_key\" = a separate key for the bastion hop when it differs from the device key. Optional \"inner_key\" = a key that lives ON the bastion for the inner hop (omit if the bastion reaches the inner node passwordlessly). Every GPU host needs nvidia-smi. The optional \"switch\" block adds a RouterOS/MikroTik fabric module (temps + per-port throughput/link-speed over SSH, jump supported). When fleet.json is absent the app falls back to nodes.json (direct nodes, no switch). All values below are RFC-5737 documentation placeholders (192.0.2.x / bastion.example.local) — replace them.",
+  "ssh": { "default_key": "~/.ssh/id_ed25519" },
+  "devices": [
+    {
+      "name": "GPU Rig A",
+      "user": "youruser",
+      "host": "192.0.2.10",
+      "ssh_key": "~/.ssh/id_ed25519",
+      "temp_warn": 70,
+      "temp_hot": 84
+    },
+    {
+      "name": "Spark 1",
+      "user": "youruser",
+      "host": "192.0.2.21",
+      "ssh_key": "~/.ssh/id_ed25519",
+      "jump": "bastionuser@bastion.example.local",
+      "jump_key": "~/.ssh/id_ed25519_bastion"
+    },
+    {
+      "name": "Spark 2",
+      "user": "youruser",
+      "host": "192.0.2.22",
+      "jump": "bastionuser@bastion.example.local"
+    },
+    {
+      "name": "Spark 3",
+      "user": "youruser",
+      "host": "192.0.2.23"
+    },
+    {
+      "name": "Spark 4",
+      "user": "youruser",
+      "host": "192.0.2.24"
+    }
+  ],
+  "switch": {
+    "name": "Fabric Switch",
+    "user": "admin",
+    "host": "192.0.2.254",
+    "ssh_key": "~/.ssh/id_ed25519",
+    "jump": "bastionuser@bastion.example.local",
+    "ports": ["ether1", "ether2", "ether3", "ether4"],
+    "temp_warn": 55,
+    "temp_hot": 70
+  }
+}
