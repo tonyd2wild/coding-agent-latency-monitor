@@ -102,7 +102,7 @@ def _load_fleet():
         devices = []
         for sub, (hs, ky, nm) in NODES.items():
             devices.append({"name": nm, "host": hs.split("@")[-1], "hostspec": hs,
-                            "key": ky, "jump": None, "port": None,
+                            "key": ky, "jump": None, "port": None, "group": None,
                             "temp_warn": 65, "temp_hot": 80})
         return devices, None
     default_key = _expand_key((raw.get("ssh") or {}).get("default_key") or "~/.ssh/id_ed25519")
@@ -120,6 +120,7 @@ def _load_fleet():
             "jump": d.get("jump"),            # "jumpuser@jumphost" -> ssh ProxyJump, or None
             "jump_key": _expand_key(d["jump_key"]) if d.get("jump_key") else None,  # separate key for the bastion hop
             "port": d.get("port"),
+            "group": d.get("group"),          # optional row-grouping label (e.g. "DGX Sparks"); None = standalone
             "temp_warn": d.get("temp_warn", 65), "temp_hot": d.get("temp_hot", 80),
         })
     sw_raw = raw.get("switch")
@@ -386,7 +387,7 @@ def _fleet_snapshot():
     dev_out = {}
     for i, dev in enumerate(DEVICES):
         dev_out[i] = {"name": dev["name"], "host": dev["host"], "gpus": [], "ram": None,
-                      "up": False, "jump": bool(dev.get("jump")),
+                      "up": False, "jump": bool(dev.get("jump")), "group": dev.get("group"),
                       "temp_warn": dev["temp_warn"], "temp_hot": dev["temp_hot"]}
     threads = []
     for i, dev in enumerate(DEVICES):
@@ -592,7 +593,15 @@ def _agent_one(run, ep, model, prof, prompt, history, turns, tool_ms, final_max,
                 if tool_ms > 0:
                     q.put({"run": run, "turn": t, "phase": "tool", "tool_ms": tool_ms})
                     time.sleep(tool_ms / 1000.0); felt += tool_ms / 1000.0
-                messages.append({"role": "user", "content": "TOOL RESULT:\n" + _filler(prof.get("tool_result", 0))})
+                tr = "TOOL RESULT:\n" + _filler(prof.get("tool_result", 0))
+                # On the LAST tool result before the final answer turn, re-anchor to the user's
+                # real question so the model answers IT (not the filler placeholder). The filler
+                # stays for realistic prefill SIZE — only the tail is appended. turns>=1 is implied
+                # here (t starts at 1); the 0-turns bare path never reaches this branch, so it is
+                # unchanged and still answers the prompt directly.
+                if t == turns:
+                    tr += "\n\nWith the tool results above, now answer my original question: " + prompt
+                messages.append({"role": "user", "content": tr})
         avg_tps = round(sum(decode_tps) / len(decode_tps), 1) if decode_tps else 0
         q.put({"run": run, "phase": "final", "felt_e2e": round(felt, 2), "total_out": total_out,
                "avg_decode_tps": avg_tps, "turns": total_turns, "tool_ms": tool_ms, "answer": final_text})

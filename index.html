@@ -54,7 +54,14 @@
   .fbadge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:#241f3a;color:var(--pur);text-transform:uppercase;letter-spacing:.04em}
   .fbadge.sw{background:#0e2a26;color:var(--teal)}
   .gpugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:7px}
+  /* grouped devices: one section per group, a single full-width HORIZONTAL row of GPU modules */
+  .fgroup{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:9px 11px;transition:opacity .3s ease}
+  .fgroup.offline{opacity:.4}
+  .fgroup-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap}
+  .grow{display:flex;flex-wrap:wrap;gap:7px}
+  .grow>.gpumod{flex:1 1 0;min-width:132px}
   .gpumod{background:#0d1119;border:1px solid var(--edge);border-radius:8px;padding:7px 8px;display:flex;flex-direction:column;gap:4px}
+  .gpumod.offline{opacity:.5}
   .gpumod-h{display:flex;justify-content:space-between;align-items:center;gap:4px}
   .gpn{font-weight:700;font-size:11px;color:var(--ink)}
   .gpumod-u{display:flex;justify-content:space-between;align-items:baseline;font-size:10px}
@@ -78,15 +85,26 @@
   .swpn{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .swpr{font-size:13px;font-weight:700;color:var(--teal);font-variant-numeric:tabular-nums;margin-top:1px}
   .swpt{font-size:9px;color:var(--dim);margin-top:1px}
-  #models{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:6px 16px 14px}
-  .mcard{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:12px 14px}
-  .mcard .mtitle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin-bottom:2px;word-break:break-word}
-  .mcard .mhost{color:var(--dim);font-size:10px;margin-bottom:9px}
-  .livedot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 7px var(--grn);flex:0 0 auto;animation:livepulse 1.8s ease-in-out infinite}
+  /* Live Models: bigger cards spread across ONE full-width flex row (wrap only if overflowing) */
+  #models{display:flex;flex-wrap:wrap;gap:12px;padding:6px 16px 14px}
+  .mcard{flex:1 1 260px;min-width:240px;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:15px 17px;display:flex;flex-direction:column;gap:11px;transition:border-color .3s,box-shadow .3s}
+  .mcard.busy{border-color:#164e46;box-shadow:0 0 0 1px rgba(45,212,191,.22)}
+  .mcard .mtitle{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;word-break:break-word}
+  .mcard .mname{flex:1 1 auto;line-height:1.15}
+  .mcard .mstatus{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);background:#0d1119;padding:2px 9px;border-radius:20px;white-space:nowrap}
+  .mcard.busy .mstatus{color:var(--teal);background:#0e2a26}
+  .mcard .mhost{color:var(--dim);font-size:11px;word-break:break-all;margin-top:-4px}
+  .livedot{width:9px;height:9px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);flex:0 0 auto;animation:livepulse 1.8s ease-in-out infinite}
+  .livedot.idle{background:var(--dim);box-shadow:none;animation:none}
   @keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.82)}}
-  .mstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .mstat{background:#0d1119;border-radius:8px;padding:7px 6px;text-align:center}
-  .mstat .k{color:var(--dim);font-size:9px;text-transform:uppercase} .mstat .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .mstats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .mstat{background:#0d1119;border-radius:8px;padding:9px 6px;text-align:center}
+  .mstat .k{color:var(--dim);font-size:9px;text-transform:uppercase} .mstat .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+  .mbarwrap{display:flex;flex-direction:column;gap:3px}
+  .mbarhd{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .mbar{height:7px;background:#05070c;border-radius:5px;overflow:hidden}
+  .mbarfill{height:100%;width:0;background:linear-gradient(90deg,#a78bfa,#60a5fa);border-radius:5px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+  .mbarfill.load{background:linear-gradient(90deg,#2dd4bf,#60a5fa)}
   .fnote{padding:2px 18px 12px;color:var(--dim);font-size:11px}
   .sec{padding:8px 16px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
   #summary{padding:0 16px 20px}
@@ -151,8 +169,14 @@
   body.matrix .temp-warm{background:#002b0a;color:#2fe864}
   body.matrix .temp-hot{background:#00ff41;color:#000}
   body.matrix .livedot{background:#00ff41;box-shadow:0 0 8px #00ff41}
-  body.matrix .fdev{background:#010b03;border-color:#0b3d1a}
+  body.matrix .fdev,body.matrix .fgroup{background:#010b03;border-color:#0b3d1a}
   body.matrix .gpumod,body.matrix .swport{background:#000c03;border-color:#0b3d1a}
+  body.matrix .mcard.busy{border-color:#00ff41}
+  body.matrix .mcard .mstatus{background:#001505;color:#00a832}
+  body.matrix .mcard.busy .mstatus{background:#002b0a;color:#00ff41}
+  body.matrix .mbar{background:#001505}
+  body.matrix .mbarfill,body.matrix .mbarfill.load{background:linear-gradient(90deg,#00ff41,#0a5f26)}
+  body.matrix .livedot.idle{background:#0a5f26;box-shadow:none}
   body.matrix .fbadge{background:#001505;color:#2fe864}
   body.matrix .fbadge.sw{background:#001505;color:#00ff41}
   body.matrix .ddot.on{background:#00ff41;box-shadow:0 0 7px #00ff41}
@@ -695,18 +719,24 @@ let FLEETTIMER=null;
 function tempClass(t,warn,hot){t=+t; if(isNaN(t))return 'temp-cool'; warn=+warn||65; hot=+hot||80; if(t>=hot)return 'temp-hot'; if(t>=warn)return 'temp-warm'; return 'temp-cool';}
 function num(v){const n=+v; return isNaN(n)?0:n;}
 function fmtbps(v){v=num(v); if(v>=1e9)return (v/1e9).toFixed(1)+'G'; if(v>=1e6)return (v/1e6).toFixed(0)+'M'; if(v>=1e3)return (v/1e3).toFixed(0)+'K'; return Math.round(v)+'';}
-// device group: compact header + one mini-module PER GPU (GPU 0, GPU 1, … each its own card)
+// one GPU mini-module. `prefix` prepends a device label (e.g. "Bluey · GPU0") so single-GPU
+// devices sharing a group row can be told apart; `showDot` adds that device's reachability dot.
+function gpuModule(g,dev,prefix,showDot){
+  const used=num(g.used),total=num(g.total),util=num(g.util);
+  const uc=Math.max(0,Math.min(100,util));
+  const dot=showDot?`<span class="ddot ${dev.up?'on':'off'}"></span>`:'';
+  const label=(prefix?agEsc(prefix)+' · ':'')+'GPU '+agEsc(g.i);
+  return `<div class="gpumod">
+    <div class="gpumod-h"><span class="gpn">${dot}${label}</span><span class="temppill ${tempClass(g.temp,dev.temp_warn,dev.temp_hot)}">${g.temp||'?'}°</span></div>
+    <div class="gpumod-u"><span class="u">${util}%</span><span class="gpumod-vram">${(used/1024).toFixed(1)}/${(total/1024).toFixed(0)}G</span></div>
+    <div class="gbar"><div class="gfill" style="width:${uc}%"></div></div>
+  </div>`;
+}
+// standalone (ungrouped) device: compact header + one mini-module PER GPU (backward compat)
 function renderDevice(n){
   const gpus=n.gpus||[];
   const jump=n.jump?'<span class="fbadge">jump</span>':'';
-  const mods=gpus.map(g=>{
-    const used=num(g.used),total=num(g.total),util=num(g.util);
-    const uc=Math.max(0,Math.min(100,util));
-    return `<div class="gpumod">
-      <div class="gpumod-h"><span class="gpn">GPU ${agEsc(g.i)}</span><span class="temppill ${tempClass(g.temp,n.temp_warn,n.temp_hot)}">${g.temp||'?'}°</span></div>
-      <div class="gpumod-u"><span class="u">${util}%</span><span class="gpumod-vram">${(used/1024).toFixed(1)}/${(total/1024).toFixed(0)}G</span></div>
-      <div class="gbar"><div class="gfill" style="width:${uc}%"></div></div>
-    </div>`;}).join('');
+  const mods=gpus.map(g=>gpuModule(g,n,null,false)).join('');
   let ram='';
   if(n.ram){const m=String(n.ram).split('/'),ru=num(m[0]),rt=num(m[1]),rp=rt>0?Math.round(100*ru/rt):0;
     ram=`<span class="framc">RAM <b>${agEsc(n.ram)}</b>G<span class="rambar mini"><span class="ramfill" style="width:${rp}%"></span></span></span>`;}
@@ -718,6 +748,35 @@ function renderDevice(n){
       <span class="fdev-meta">${n.up?agEsc(n.host||''):'offline'} ${ram}</span>
     </div>
     ${body}
+  </div>`;
+}
+// grouped devices: one group header + a single full-width HORIZONTAL row of all the group's GPU
+// modules. Multi-device groups (e.g. 4 Sparks) label every module with its device name + dot so
+// you can tell them apart; a multi-GPU single device (e.g. the 3090) just spreads its GPUs.
+function renderGroup(name,devs){
+  const multi=devs.length>1;
+  const mods=[];
+  devs.forEach(d=>{
+    const gpus=d.gpus||[];
+    if(gpus.length){
+      gpus.forEach(g=>mods.push(gpuModule(g,d,multi?(d.name||d.host):null,multi)));
+    }else{
+      // offline / no GPUs reported — a dimmed placeholder so the device still shows in the row
+      const nm=d.name||d.host||(multi?'device':'GPU');
+      mods.push(`<div class="gpumod offline">
+        <div class="gpumod-h"><span class="gpn"><span class="ddot ${d.up?'on':'off'}"></span>${agEsc(nm)}</span></div>
+        <div class="fgpu-sub">${d.up?'no GPUs':'offline'}</div>
+      </div>`);
+    }
+  });
+  const upCount=devs.filter(d=>d.up).length;
+  const jump=devs.some(d=>d.jump)?'<span class="fbadge">jump</span>':'';
+  return `<div class="fgroup${upCount?'':' offline'}">
+    <div class="fgroup-head">
+      <span class="fdev-name"><span class="ddot ${upCount?'on':'off'}"></span>${agEsc(name)} ${jump}</span>
+      <span class="fdev-meta">${upCount}/${devs.length} up</span>
+    </div>
+    <div class="grow">${mods.join('')}</div>
   </div>`;
 }
 // fabric switch module: temps + a dense row of active fabric ports (Tx/Rx + link speed)
@@ -758,25 +817,45 @@ function renderFleet(data){
   devices.forEach(n=>(n.gpus||[]).forEach(()=>{totGpu++; if(n.up)upGpu++;}));
   const swStat=sw?(sw.up?' · switch up':' · switch down'):'';
   $('fleetstat').textContent=`${upDev}/${devices.length} device${devices.length===1?'':'s'} · ${upGpu}/${totGpu} GPU${swStat}`;
-  let html=devices.map(renderDevice).join('');
+  // Grouped devices render as one full-width row per group (in first-appearance order); devices
+  // with no "group" render standalone exactly as before. The switch stays a standalone module.
+  const seen=new Set();
+  let html='';
+  devices.forEach(n=>{
+    const g=n.group;
+    if(g==null||g===''){html+=renderDevice(n); return;}
+    if(seen.has(g))return;
+    seen.add(g);
+    html+=renderGroup(g,devices.filter(d=>d.group===g));
+  });
   if(sw)html+=renderSwitch(sw);
   el.innerHTML=html;
 }
+// Live Models: one bigger card per up model, spread across a single full-width row. Shows the
+// model name, endpoint host, live running/waiting request counts, KV-cache %, an animated KV bar,
+// and an up/idle status dot (busy = there are running requests).
 function renderModels(models){
   const el=$('models'); if(!el)return;
   if(!models.length){el.innerHTML='<div class="fnote">No models running</div>'; $('modelsstat').textContent=''; return;}
-  $('modelsstat').textContent=models.length+' live';
+  const busyN=models.filter(m=>num(m.running)>0).length;
+  $('modelsstat').textContent=`${models.length} live${busyN?' · '+busyN+' busy':''}`;
   el.innerHTML=models.map(m=>{
+    const busy=num(m.running)>0;
     const run=m.running!=null?Math.round(m.running):'—';
     const wait=m.waiting!=null?Math.round(m.waiting):'—';
-    const kv=m.kv!=null?m.kv+'%':'—';
-    return `<div class="mcard">
-      <div class="mtitle"><span class="livedot"></span>${agEsc(m.name||'model')}</div>
-      <div class="mhost">${agEsc(m.host||m.endpoint||'')}</div>
+    const kvTxt=m.kv!=null?m.kv+'%':'—';
+    const kvw=m.kv!=null?Math.max(0,Math.min(100,num(m.kv))):0;
+    return `<div class="mcard${busy?' busy':''}">
+      <div class="mtitle"><span class="livedot${busy?'':' idle'}"></span><span class="mname">${agEsc(m.name||'model')}</span><span class="mstatus">${busy?'running':'idle'}</span></div>
+      <div class="mhost">🔌 ${agEsc(m.host||m.endpoint||'')}</div>
       <div class="mstats">
         <div class="mstat"><div class="k">Running</div><div class="v" style="color:var(--teal)">${run}</div></div>
         <div class="mstat"><div class="k">Waiting</div><div class="v" style="color:var(--org)">${wait}</div></div>
-        <div class="mstat"><div class="k">KV</div><div class="v" style="color:var(--pur)">${kv}</div></div>
+        <div class="mstat"><div class="k">KV cache</div><div class="v" style="color:var(--pur)">${kvTxt}</div></div>
+      </div>
+      <div class="mbarwrap">
+        <div class="mbarhd"><span>KV cache</span><span>${kvTxt}</span></div>
+        <div class="mbar"><div class="mbarfill" style="width:${kvw}%"></div></div>
       </div>
     </div>`;}).join('');
 }
