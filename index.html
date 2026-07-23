@@ -41,6 +41,34 @@
   pre{margin:0;padding:9px 12px;height:150px;overflow:auto;white-space:pre-wrap;color:#c3ccd8;font-size:11.5px;background:#0d1119}
   #hw{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--edge);border-top:1px solid var(--edge)}
   .hw{background:#160f14;padding:10px 14px} .hw .k{color:var(--dim);font-size:10px} .hw .v{font-size:14px;font-weight:700;color:var(--red)}
+  /* ===== Live Fleet + Live Models (always-on, animated) ===== */
+  #fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;padding:6px 16px 14px}
+  .fcard{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:9px;transition:opacity .3s ease}
+  .fcard.offline{opacity:.42}
+  .fcard .fhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .fcard .fname{font-weight:700;font-size:13px} .fcard .fhost{color:var(--dim);font-size:10px;white-space:nowrap}
+  .fgpu{display:flex;flex-direction:column;gap:3px}
+  .fgpu-top{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+  .fgpu-top .u{color:var(--teal);font-weight:700}
+  .gbar{height:8px;background:#0d1119;border-radius:5px;overflow:hidden}
+  .gfill{height:100%;width:0;background:linear-gradient(90deg,#2dd4bf,#60a5fa);border-radius:5px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+  .fgpu-sub{color:var(--dim);font-size:10px}
+  .temppill{font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;transition:background .3s,color .3s}
+  .temp-cool{background:#0e2a26;color:var(--teal)} .temp-warm{background:#2a2010;color:var(--org)} .temp-hot{background:#2a1414;color:var(--red)}
+  .fram{font-size:11px;color:var(--dim);border-top:1px solid var(--edge);padding-top:8px}
+  .fram b{color:var(--ink)}
+  .rambar{height:6px;background:#0d1119;border-radius:5px;overflow:hidden;margin-top:4px}
+  .ramfill{height:100%;width:0;background:linear-gradient(90deg,#a78bfa,#60a5fa);border-radius:5px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+  #models{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:6px 16px 14px}
+  .mcard{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:12px 14px}
+  .mcard .mtitle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;margin-bottom:2px;word-break:break-word}
+  .mcard .mhost{color:var(--dim);font-size:10px;margin-bottom:9px}
+  .livedot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 7px var(--grn);flex:0 0 auto;animation:livepulse 1.8s ease-in-out infinite}
+  @keyframes livepulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.82)}}
+  .mstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .mstat{background:#0d1119;border-radius:8px;padding:7px 6px;text-align:center}
+  .mstat .k{color:var(--dim);font-size:9px;text-transform:uppercase} .mstat .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .fnote{padding:2px 18px 12px;color:var(--dim);font-size:11px}
   .sec{padding:8px 16px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
   #summary{padding:0 16px 20px}
   .stiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
@@ -96,6 +124,14 @@
   body.matrix table.pt tr:hover td{background:#001c07}
   body.matrix .cbar .track{background:#001505}
   body.matrix .cbar .fill{background:linear-gradient(90deg,#00ff41,#0a5f26)}
+  body.matrix .gbar,body.matrix .rambar,body.matrix .mstat{background:#001505}
+  body.matrix .gfill{background:linear-gradient(90deg,#00ff41,#0a5f26)}
+  body.matrix .ramfill{background:linear-gradient(90deg,#2fe864,#0a5f26)}
+  body.matrix .fgpu-top .u{color:#00ff41}
+  body.matrix .temp-cool{background:#001505;color:#00a832}
+  body.matrix .temp-warm{background:#002b0a;color:#2fe864}
+  body.matrix .temp-hot{background:#00ff41;color:#000}
+  body.matrix .livedot{background:#00ff41;box-shadow:0 0 8px #00ff41}
 </style></head>
 <body>
 <canvas id="mrain" aria-hidden="true"></canvas>
@@ -108,7 +144,7 @@
     <label>Prompt<textarea class="prompt" id="prompt" rows="1">Build a complete single-file HTML5 canvas game called Protocol Starfall: a top-down space shooter with waves of enemies, score, health, and a game-over screen. Return only the full HTML.</textarea></label>
     <label>Mode<select id="pmode"><option value="single" selected>Single prompt</option><option value="mixed">Mixed presets</option></select></label>
     <label>Quant/note<input class="num" id="quant" style="width:104px" placeholder="Int4" value=""></label>
-    <label>Parallel<input class="num" id="par" type="number" value="6" min="1" max="32"></label>
+    <label>Parallel<input class="num" id="par" type="number" value="6" min="1" max="256"></label>
     <label>Max tok<input class="num" id="mx" type="number" value="4096"></label>
     <label>Temp<input class="num" id="temp" type="number" value="0.2" step="0.1"></label>
     <label>Think<select id="think"><option value="0" selected>off</option><option value="1">on</option></select></label>
@@ -120,11 +156,17 @@
   <button class="tab active" id="tab-live" onclick="showTab('live')">⚡ Live Monitor</button>
   <button class="tab" id="tab-past" onclick="showTab('past')">📊 Past Runs</button>
   <button class="tab" id="tab-art" onclick="showTab('art')">🎨 Art Mode</button>
+  <button class="tab" id="tab-compare" onclick="showTab('compare')">⚔️ Comparison</button>
+  <button class="tab" id="tab-agent" onclick="showTab('agent')">🤖 Agent</button>
 </div>
 <div id="liveview">
 <div class="bar"><span class="sec" style="padding:0">Streaming Outputs</span><span class="total" id="total">Total live 0.0 tok/s</span></div>
 <div id="grid"></div>
-<div class="sec">Hardware Metrics</div>
+<div class="sec">🖥️ Live Fleet <span id="fleetstat" class="meta" style="text-transform:none"></span></div>
+<div id="fleet"></div>
+<div class="sec">🧠 Live Models <span id="modelsstat" class="meta" style="text-transform:none"></span></div>
+<div id="models"></div>
+<div class="sec">Hardware Metrics <span class="meta" style="text-transform:none">current endpoint · during a run</span></div>
 <div id="hw"></div>
 <div class="sec" id="sumhdr" style="display:none">Run Summary <button id="copybtn" style="padding:5px 12px">📋 Copy for sharing</button></div>
 <div id="summary" style="display:none"></div>
@@ -146,7 +188,7 @@
     <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Shape
       <input id="ashape" style="width:260px" value="a sine wave"></label>
     <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Agents
-      <input class="num" id="an" type="number" value="6" min="1" max="16"></label>
+      <input class="num" id="an" type="number" value="6" min="1" max="256"></label>
     <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Width
       <input class="num" id="aw" type="number" value="120" min="20" max="240"></label>
     <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Height
@@ -158,6 +200,38 @@
   <div id="aslices" style="display:flex;gap:2px;overflow-x:auto;padding:10px 16px"></div>
   <div class="sec">Stitched result — <span id="ameta" style="text-transform:none"></span></div>
   <pre id="acanvas" style="height:auto;max-height:560px;font-size:11px;line-height:1.05;letter-spacing:0"></pre>
+</div>
+
+<div id="compareview" style="display:none">
+  <div class="pastbar">
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Model A<select id="cmpA" style="min-width:220px"></select></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Model B<select id="cmpB" style="min-width:220px"></select></label>
+    <button id="crun" style="background:var(--blue);color:#04121f">⚔️ Race</button>
+    <button id="cstop" style="background:#2a2f3a;color:#e5e7eb">■ Stop</button>
+    <span id="cstat" class="meta"></span>
+  </div>
+  <div class="meta" style="padding:0 16px 6px">Uses the same <b>Prompt · Parallel · Max tok · Temp · Think</b> from the top bar. Both models fire the identical workload at the same instant so the tok/s is a fair head-to-head.</div>
+  <div id="cbanner" style="padding:4px 16px"></div>
+  <div id="ccols" style="display:flex;gap:14px;padding:10px 16px;align-items:flex-start;flex-wrap:wrap"></div>
+</div>
+
+<div id="agentview" style="display:none">
+  <div class="pastbar">
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Model<select id="agmodel" style="min-width:190px"></select></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Harness profile<select id="agprof" style="min-width:180px"></select></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Turns<input class="num" id="agturns" type="number" value="3" min="0" max="12"></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Tool ms<input class="num" id="agtoolms" type="number" value="300" min="0" max="10000"></label>
+    <label style="color:var(--dim);font-size:11px;display:flex;flex-direction:column;gap:2px">Max tok<input class="num" id="agmax" type="number" value="512"></label>
+    <button id="agnew" style="background:var(--card);color:var(--dim);border:1px solid var(--edge)">🧹 New chat</button>
+    <span id="agstat" class="meta"></span>
+  </div>
+  <div class="meta" style="padding:0 16px 8px">A real chat <b>through a harness</b>. Every message carries the profile's system-prompt + tools prefill AND the whole conversation so far, runs the tool loop, then answers. Raw decode stays fast; the <b>felt</b> wait is the harness tax, and it grows as the chat gets longer. Reuses <b>Temp · Think</b> from the top bar.</div>
+  <div id="agchat" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;min-height:200px;max-height:58vh;overflow-y:auto"></div>
+  <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--edge)">
+    <textarea id="agbar" rows="1" placeholder="Message the agent…  (Enter to send · Shift+Enter = newline)" style="flex:1;resize:none;max-height:120px;height:auto"></textarea>
+    <button id="agsend" style="background:var(--org);color:#1a1003">➤ Send</button>
+    <button id="agstop" style="background:#2a2f3a;color:#e5e7eb" disabled>■ Stop</button>
+  </div>
 </div>
 
 <script>
@@ -293,7 +367,7 @@ $('run').onclick=async ()=>{
   const mix=mixed?checkedMix():null;
   if(mixed&&!mix.length){alert('Mixed presets: check at least one preset.');return;}
   if(CTRL)CTRL.abort(); CTRL=new AbortController(); setRunning(true);
-  const c=cur(), n=Math.max(1,Math.min(32,+$('par').value));
+  const c=cur(), n=Math.max(1,Math.min(256,+$('par').value));
   const g=$('grid'); g.innerHTML=''; for(const k in R)delete R[k];
   PEAK=0; RUN_T0=performance.now(); SUMMED=false;
   META={model:c.model, hw:$('preset').value.replace(/\s*\(.*$/,'').trim()||'local',
@@ -347,10 +421,16 @@ function showTab(t){
   $('liveview').style.display=t==='live'?'block':'none';
   $('pastview').style.display=t==='past'?'block':'none';
   $('artview').style.display=t==='art'?'block':'none';
+  $('compareview').style.display=t==='compare'?'block':'none';
+  $('agentview').style.display=t==='agent'?'block':'none';
   $('tab-live').classList.toggle('active',t==='live');
   $('tab-past').classList.toggle('active',t==='past');
   $('tab-art').classList.toggle('active',t==='art');
-  if(t==='past')loadPastRuns();}
+  $('tab-compare').classList.toggle('active',t==='compare');
+  $('tab-agent').classList.toggle('active',t==='agent');
+  if(t==='past')loadPastRuns();
+  if(t==='compare')fillCompareSelects();
+  if(t==='agent')initAgent();}
 
 // ---- 🎨 Art Mode: N agents each render one vertical slice of the same canvas; stitched live ----
 let ARTCTRL=null;
@@ -390,6 +470,181 @@ $('arun').onclick=async ()=>{
     $('astat').textContent=`✅ ${n} agents, stitched ${w}×${h}`;
   }catch(e){if(!ARTCTRL.signal.aborted)$('astat').textContent='❌ '+e.message;}
 };
+// ---- ⚔️ Comparison Mode: two models, identical prompt/workload, side-by-side race ----
+let CMP={a:null,b:null};
+function fillCompareSelects(){
+  const keys=Object.keys(PRESETS);
+  ['cmpA','cmpB'].forEach((id,idx)=>{
+    const sel=$(id); if(!sel)return; const prev=sel.value;
+    sel.innerHTML=keys.map(k=>`<option>${k.replace(/</g,'&lt;')}</option>`).join('');
+    if(prev&&keys.includes(prev))sel.value=prev; else sel.selectedIndex=Math.min(idx,Math.max(0,keys.length-1));
+  });
+}
+function cmpParse(key){const [ep,model]=(PRESETS[key]||'|').split('|');return {ep,model};}
+function runOneSide(colId, key, n, prompt, mx, temp, think){
+  const {ep,model}=cmpParse(key);
+  const R={}, t0all=performance.now(); let peakAgg=0;
+  const runsEl=$('runs'+colId), aggEl=$('agg'+colId), tilesEl=$('tiles'+colId);
+  runsEl.innerHTML='';
+  for(let i=1;i<=n;i++){R[i]={t0:performance.now(),tFirst:null,chars:0,usageTok:null,tps:0,peakTps:0,ttftS:null,e2eS:null,finalTokens:0,final:false};
+    const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;font-size:12px;font-variant-numeric:tabular-nums;padding:1px 0';
+    row.innerHTML=`<span style="width:30px;color:#6b7280">#${i}</span><span id="${colId}tps${i}" style="width:58px;font-weight:700;color:#e5e7eb">—</span><span id="${colId}tok${i}" style="width:78px;color:#9ca3af">0 tok</span><span id="${colId}st${i}" style="color:#6b7280">…</span>`;
+    runsEl.appendChild(row);}
+  const agg=()=>{let s=0;for(const k in R)s+=R[k].tps||0; if(s>peakAgg)peakAgg=s; aggEl.innerHTML=`${s.toFixed(1)} <span style="font-size:12px;color:#6b7280;font-weight:400">tok/s live</span>`;};
+  const ctrl=new AbortController(); CMP[colId]=ctrl;
+  const summarize=()=>{
+    const runs=Object.values(R).filter(r=>r.finalTokens>0);
+    const tpss=runs.map(r=>r.peakTps||0), toks=runs.map(r=>r.finalTokens||0);
+    const ttfts=runs.map(r=>r.ttftS).filter(x=>x!=null);
+    const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+    const totalTok=toks.reduce((x,y)=>x+y,0), wall=(performance.now()-t0all)/1000, combined=wall>0?totalTok/wall:0;
+    const s={model,ep,peakAgg:+peakAgg.toFixed(1),combined:+combined.toFixed(1),avgPeak:+mean(tpss).toFixed(1),totalTok,avgTtft:+mean(ttfts).toFixed(2),wall:+wall.toFixed(1),parallel:runs.length};
+    tilesEl.innerHTML=[['Peak agg',s.peakAgg+' t/s'],['Sustained',s.combined+' t/s'],['Per-stream',s.avgPeak+' t/s'],['Total tok',totalTok.toLocaleString()],['Avg TTFT',s.avgTtft+'s'],['Wall',s.wall+'s']]
+      .map(([k,v])=>`<div style="background:#0d1117;border:1px solid #222;border-radius:8px;padding:6px 10px;min-width:70px"><div style="font-size:9px;color:#6b7280;text-transform:uppercase">${k}</div><div style="font-size:14px;font-weight:700;color:#e5e7eb">${v}</div></div>`).join('');
+    return s;};
+  return new Promise(async(resolve)=>{
+    let resolved=false; const finish=()=>{if(!resolved){resolved=true;try{ctrl.abort();}catch(e){} resolve(summarize());}};
+    const finalize=(i,state)=>{const r=R[i]; if(!r||r.final)return; r.final=true; r.e2eS=(performance.now()-r.t0)/1000; r.finalTokens=r.usageTok||Math.round(r.chars/4);
+      const st=$(colId+'st'+i); if(st)st.textContent=state==='done'?'✓':(state==='err'?'⚠':'×'); r.tps=0; agg();
+      if(Object.values(R).every(x=>x.final))finish();};
+    const onEv=(ev)=>{const i=ev.run,r=R[i]; if(!r)return;
+      if(ev.err){finalize(i,'err');return;} if(ev.killed){finalize(i,'killed');return;} if(ev.done){finalize(i,'done');return;}
+      const d=ev.c||''; if(d){if(r.tFirst===null){r.tFirst=performance.now();r.ttftS=(r.tFirst-r.t0)/1000;} r.chars+=d.length;}
+      if(ev.u)r.usageTok=ev.u;
+      if(r.tFirst){const est=r.usageTok||Math.round(r.chars/4),dt=(performance.now()-r.tFirst)/1000;
+        const tk=$(colId+'tok'+i);if(tk)tk.textContent=est+' tok';
+        if(dt>0.4){r.tps=est/dt; if(r.tps>(r.peakTps||0))r.peakTps=r.tps; const tp=$(colId+'tps'+i);if(tp)tp.textContent=r.tps.toFixed(1); agg();}}};
+    const url=`/runall?ep=${encodeURIComponent(ep)}&model=${encodeURIComponent(model)}&max_tokens=${mx}&temp=${temp}&think=${think}&n=${n}&prompt=${encodeURIComponent(prompt)}`;
+    try{
+      const rr=await fetch(url,{signal:ctrl.signal}); const rd=rr.body.getReader(),dec=new TextDecoder(); let buf='';
+      while(true){const {done:dn,value}=await rd.read(); if(dn)break; buf+=dec.decode(value,{stream:true});
+        let nl; while((nl=buf.indexOf('\n\n'))>=0){const blk=buf.slice(0,nl);buf=buf.slice(nl+2);
+          const dl=blk.split('\n').find(l=>l.startsWith('data:')); if(!dl)continue;
+          try{onEv(JSON.parse(dl.slice(5).trim()))}catch{}}}
+    }catch(e){}
+    Object.keys(R).forEach(i=>{if(!R[i].final)finalize(i,'killed');}); finish();
+  });
+}
+async function runCompare(){
+  if(!Object.keys(PRESETS).length){alert('No presets loaded yet.');return;}
+  const ka=$('cmpA').value, kb=$('cmpB').value;
+  if(ka===kb && !confirm('Model A and Model B are the same endpoint. Race anyway?'))return;
+  const n=Math.max(1,Math.min(256,+$('par').value||6));
+  const prompt=$('prompt').value, mx=$('mx').value, temp=$('temp').value, think=$('think').value;
+  const A=cmpParse(ka), B=cmpParse(kb);
+  $('cbanner').innerHTML='';
+  $('ccols').innerHTML=[['a',ka,A,'var(--blue)'],['b',kb,B,'var(--pur)']].map(([id,key,mm,col])=>
+    `<div style="flex:1 1 340px;min-width:300px;border-top:3px solid ${col};background:#0b0e13;border-radius:0 0 10px 10px;padding:10px 12px">
+       <h3 style="margin:0 0 2px;color:${col};font-size:14px">${(mm.model||'?').replace(/</g,'&lt;')}</h3>
+       <div class="meta">${key.replace(/</g,'&lt;')}</div>
+       <div id="agg${id}" style="font-size:30px;font-weight:800;margin:6px 0;color:${col}">— <span style="font-size:12px;color:#6b7280;font-weight:400">tok/s live</span></div>
+       <div id="tiles${id}" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0"></div>
+       <div id="runs${id}" style="margin-top:6px"></div>
+     </div>`).join('');
+  $('cstat').textContent='⚔️ racing…'; $('crun').disabled=true;
+  const [ra,rb]=await Promise.all([runOneSide('a',ka,n,prompt,mx,temp,think),runOneSide('b',kb,n,prompt,mx,temp,think)]);
+  $('crun').disabled=false; $('cstat').textContent='✅ done';
+  const win = ra.combined===rb.combined?null:(ra.combined>rb.combined?'a':'b');
+  const fast= win==='b'?rb:ra, slow= win==='b'?ra:rb;
+  const ratio= slow.combined>0?(fast.combined/slow.combined):0, pct= slow.combined>0?(100*(fast.combined-slow.combined)/slow.combined):0;
+  const wcol= win==='a'?'var(--blue)':(win==='b'?'var(--pur)':'#9ca3af');
+  $('cbanner').innerHTML=
+    `<div style="border:1px solid #2a2f3a;border-radius:10px;padding:12px 16px;background:#0d1117">
+       <div style="font-size:12px;color:#9ca3af;margin-bottom:6px">⚔️ Head-to-head · sustained throughput (total tokens ÷ wall time)</div>
+       <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+         <div><span style="color:var(--blue);font-weight:700">${ra.model.replace(/</g,'&lt;')}</span> <b style="font-size:20px">${ra.combined}</b> <span class="meta">tok/s · peak ${ra.peakAgg} · ${ra.totalTok.toLocaleString()} tok</span></div>
+         <div style="color:#4b5563">vs</div>
+         <div><span style="color:var(--pur);font-weight:700">${rb.model.replace(/</g,'&lt;')}</span> <b style="font-size:20px">${rb.combined}</b> <span class="meta">tok/s · peak ${rb.peakAgg} · ${rb.totalTok.toLocaleString()} tok</span></div>
+       </div>
+       <div style="margin-top:8px;font-size:15px;font-weight:800;color:${wcol}">${win?`🏆 ${fast.model.replace(/</g,'&lt;')} wins — ${ratio.toFixed(2)}× faster (+${pct.toFixed(0)}%)`:'🤝 dead heat'}</div>
+     </div>`;
+}
+function stopCompare(){['a','b'].forEach(k=>{if(CMP[k])CMP[k].abort();}); fetch('/kill').catch(()=>{}); $('cstat').textContent='■ stopped'; $('crun').disabled=false;}
+$('crun').onclick=runCompare; $('cstop').onclick=stopCompare;
+// ---- 🤖 Agent Mode: a real CHAT through a harness (shows the answer + felt latency; follow-ups grow the tax) ----
+let AGHIST=[], AGCTRL=null, HARNESS={}, AGBUSY=false;
+const agEsc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+async function initAgent(){
+  const keys=Object.keys(PRESETS);
+  const ms=$('agmodel'); const prevM=ms.value;
+  ms.innerHTML=keys.map(k=>`<option>${agEsc(k)}</option>`).join('');
+  if(prevM&&keys.includes(prevM))ms.value=prevM;
+  if(!Object.keys(HARNESS).length){try{HARNESS=await (await fetch('/harness')).json();}catch(e){HARNESS={};}}
+  const ps=$('agprof');
+  if(ps&&!ps.options.length){
+    ps.innerHTML=Object.keys(HARNESS).map(k=>`<option>${agEsc(k)}</option>`).join('');
+    const std=Object.keys(HARNESS).find(k=>/standard/i.test(k)); if(std)ps.value=std;
+  }
+}
+function agAppend(node){const c=$('agchat'); c.appendChild(node); c.scrollTop=c.scrollHeight; return node;}
+function agUserBubble(text){
+  const d=document.createElement('div');
+  d.style.cssText='align-self:flex-end;max-width:86%;background:#0e2a26;border:1px solid #164e46;border-radius:12px;padding:9px 12px;white-space:pre-wrap;color:var(--ink)';
+  d.textContent=text; return agAppend(d);
+}
+function agBotBubble(model){
+  const d=document.createElement('div');
+  d.style.cssText='align-self:flex-start;max-width:86%;background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:9px 12px';
+  d.innerHTML=`<div style="color:var(--org);font-size:10px;text-transform:uppercase;margin-bottom:4px">🤖 ${agEsc(model)}</div>`+
+    `<div class="agbody" style="white-space:pre-wrap;color:#dbe4ee">…</div>`+
+    `<div class="agfoot" style="margin-top:8px;font-size:11px;color:var(--dim)"></div>`+
+    `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--dim);font-size:11px">turn timeline (the harness tax)</summary><div class="agtl" style="display:flex;flex-direction:column;gap:4px;margin-top:6px"></div></details>`;
+  return agAppend(d);
+}
+function agTurnChip(t,tn){
+  const chip=(bg,fg,txt)=>`<span style="background:${bg};color:${fg};border-radius:5px;padding:2px 7px;font-weight:600;font-size:11px">${txt}</span>`;
+  if(tn.err)return `<div style="display:flex;gap:6px;align-items:center"><span style="width:48px;color:var(--dim);font-weight:700;font-size:11px">T${t}</span>${chip('#2a1414','var(--red)','⚠ '+agEsc(tn.err))}</div>`;
+  const inTxt=tn.inTok!=null?tn.inTok+' tok':'…', ttft=tn.ttft!=null?tn.ttft.toFixed(2)+'s':'…';
+  const out=tn.out!=null?tn.out+' tok':'…', tps=tn.tps!=null?tn.tps.toFixed(1)+' t/s':'…';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-variant-numeric:tabular-nums">`+
+    `<span style="width:48px;color:var(--dim);font-weight:700;font-size:11px">T${t}${tn.final?' fin':''}</span>`+
+    chip('#0e2a26','var(--teal)','prefill '+inTxt+' → TTFT '+ttft)+
+    chip('#241f3a','var(--pur)','decode '+out+' @ '+tps)+
+    (tn.toolMs!=null?chip('#2a2010','var(--org)','🔧 '+tn.toolMs+'ms'):'')+`</div>`;
+}
+async function agSend(){
+  if(AGBUSY)return;
+  const text=($('agbar').value||'').trim(); if(!text)return;
+  if(!Object.keys(PRESETS).length){alert('No presets loaded yet.');return;}
+  const key=$('agmodel').value, parts=(PRESETS[key]||'|').split('|'), ep=parts[0], model=parts[1];
+  const prof=$('agprof').value;
+  const turns=Math.max(0,Math.min(12,+$('agturns').value||0));
+  const toolMs=Math.max(0,Math.min(10000,+$('agtoolms').value||0));
+  const mx=+$('agmax').value||512, temp=$('temp').value, think=$('think').value;
+  agUserBubble(text); $('agbar').value=''; $('agbar').style.height='auto';
+  const bub=agBotBubble(model), body=bub.querySelector('.agbody'), foot=bub.querySelector('.agfoot'), tl=bub.querySelector('.agtl');
+  AGBUSY=true; $('agsend').disabled=true; $('agstop').disabled=false; $('agstat').textContent='⏳ thinking…';
+  AGCTRL=new AbortController();
+  const TS={}; let answer=''; let got=false;
+  const drawTL=()=>{tl.innerHTML=Object.keys(TS).sort((a,b)=>a-b).map(t=>agTurnChip(t,TS[t])).join('');};
+  const onEv=(ev)=>{
+    if(ev.run!==1)return;
+    if(ev.phase==='final'){answer=ev.answer||answer||''; body.textContent=answer||'(no text returned)'; got=!!answer;
+      foot.innerHTML=`🕐 felt <b style="color:var(--org)">${ev.felt_e2e}s</b> · raw <b style="color:var(--pur)">${ev.avg_decode_tps} tok/s</b> · ${ev.turns} turns · ${ev.total_out} tok out`;
+      $('agchat').scrollTop=$('agchat').scrollHeight; return;}
+    if(ev.err!=null){if(ev.turn!=null){(TS[ev.turn]=TS[ev.turn]||{}).err=ev.err; drawTL();}else{body.innerHTML='<span style="color:var(--red)">⚠ '+agEsc(ev.err)+'</span>';} return;}
+    if(ev.killed){if(ev.turn==null)foot.textContent='■ stopped'; return;}
+    if(ev.phase==='start'){TS[ev.turn]={started:true,final:!!ev.final}; drawTL(); return;}
+    if(ev.phase==='turn_done'){const tn=TS[ev.turn]||{}; tn.ttft=ev.ttft; tn.out=ev.out; tn.tps=ev.tps; tn.inTok=ev.in; tn.done=true; TS[ev.turn]=tn; drawTL(); return;}
+    if(ev.phase==='tool'){(TS[ev.turn]=TS[ev.turn]||{}).toolMs=ev.tool_ms; drawTL(); return;}
+    if(ev.turn!=null&&ev.c!=null){const st=TS[ev.turn]; if(st&&st.final){answer+=ev.c; body.textContent=answer; $('agchat').scrollTop=$('agchat').scrollHeight;}}
+  };
+  const url=`/agentrun?ep=${encodeURIComponent(ep)}&model=${encodeURIComponent(model)}&profile=${encodeURIComponent(prof)}&prompt=${encodeURIComponent(text)}&turns=${turns}&tool_ms=${toolMs}&max_tokens=${mx}&temp=${temp}&think=${think}&n=1&history=${encodeURIComponent(JSON.stringify(AGHIST))}`;
+  try{
+    const r=await fetch(url,{signal:AGCTRL.signal}); const rd=r.body.getReader(),dec=new TextDecoder(); let buf='';
+    while(true){const {done,value}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+      let nl; while((nl=buf.indexOf('\n\n'))>=0){const blk=buf.slice(0,nl); buf=buf.slice(nl+2);
+        const dl=blk.split('\n').find(l=>l.startsWith('data:')); if(!dl)continue;
+        try{onEv(JSON.parse(dl.slice(5).trim()))}catch{}}}
+  }catch(e){if(!AGCTRL.signal.aborted){body.innerHTML='<span style="color:var(--red)">⚠ '+agEsc(e.message)+'</span>';}}
+  if(got){AGHIST.push({role:'user',content:text}); AGHIST.push({role:'assistant',content:answer});}
+  AGBUSY=false; $('agsend').disabled=false; $('agstop').disabled=true; if(!(AGCTRL&&AGCTRL.signal.aborted))$('agstat').textContent='';
+}
+$('agsend').onclick=agSend;
+$('agbar').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();agSend();}});
+$('agbar').addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px';});
+$('agstop').onclick=()=>{if(AGCTRL)AGCTRL.abort(); fetch('/kill').catch(()=>{}); AGBUSY=false; $('agsend').disabled=false; $('agstop').disabled=true; $('agstat').textContent='■ stopped';};
+$('agnew').onclick=()=>{AGHIST=[]; $('agchat').innerHTML=''; $('agstat').textContent='new chat';};
 async function saveRun(rec){try{await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});}catch(e){}}
 async function loadPastRuns(){try{const d=await (await fetch('/runs')).json(); PAST=d.runs||[];
   $('pstore').textContent='stored: '+(d.store||'');
@@ -408,7 +663,57 @@ function renderPast(){
   const td=rows.map(r=>`<tr><td class="l">${(r.ts||'').replace('T',' ').slice(0,16)}</td><td class="l">${r.model||''}</td><td class="l">${r.quant||'—'}</td><td class="l">${r.cluster||''}</td><td>${r.parallel||''}</td><td>${fmt(r.peak)}</td><td>${fmt(r.sustained)}</td><td>${fmt(r.hi)}</td><td>${fmt(r.lo)}</td><td>${fmt(r.avg)}</td><td>${fmt(r.ttft,2)}</td><td>${fmt(r.e2e,0)}</td><td>${(+r.total||0).toLocaleString()}</td></tr>`).join('');
   $('ptable').innerHTML=`<div class="tbwrap"><table class="pt"><thead><tr>${th}</tr></thead><tbody>${td}</tbody></table></div>`;
 }
-loadPresets(); setRunning(false);
+// ---- 🖥️ Live Fleet + 🧠 Live Models: poll /api/fleet every 3s, ALWAYS (not just during a run) ----
+let FLEETTIMER=null;
+function tempClass(t){t=+t; if(isNaN(t))return 'temp-cool'; if(t>=80)return 'temp-hot'; if(t>=65)return 'temp-warm'; return 'temp-cool';}
+function num(v){const n=+v; return isNaN(n)?0:n;}
+function renderFleet(nodes){
+  const el=$('fleet'); if(!el)return;
+  if(!nodes.length){el.innerHTML='<div class="fnote">No nodes configured — add <b>nodes.json</b> for live per-GPU telemetry.</div>'; $('fleetstat').textContent=''; return;}
+  const up=nodes.filter(n=>n.up).length;
+  $('fleetstat').textContent=up+'/'+nodes.length+' online';
+  el.innerHTML=nodes.map(n=>{
+    const gpus=(n.gpus||[]).map(g=>{
+      const used=num(g.used),total=num(g.total),util=num(g.util);
+      const pct=total>0?Math.round(100*used/total):0;
+      return `<div class="fgpu">
+        <div class="fgpu-top"><span>GPU ${agEsc(g.i)} · <span class="u">${util}%</span></span><span class="temppill ${tempClass(g.temp)}">${g.temp||'?'}°C</span></div>
+        <div class="gbar"><div class="gfill" style="width:${Math.max(0,Math.min(100,util))}%"></div></div>
+        <div class="fgpu-sub">${used.toLocaleString()} / ${total.toLocaleString()} MiB · ${pct}%</div>
+      </div>`;}).join('');
+    let ram='';
+    if(n.ram){const m=String(n.ram).split('/'),ru=num(m[0]),rt=num(m[1]),rp=rt>0?Math.round(100*ru/rt):0;
+      ram=`<div class="fram">RAM <b>${agEsc(n.ram)}</b> GiB<div class="rambar"><div class="ramfill" style="width:${rp}%"></div></div></div>`;}
+    return `<div class="fcard${n.up?'':' offline'}">
+      <div class="fhead"><span class="fname">${agEsc(n.name||n.host||'node')}</span><span class="fhost">${n.up?agEsc(n.host||''):'⚫ offline'}</span></div>
+      <div>${gpus||'<div class="fgpu-sub">'+(n.up?'no GPUs reported':'unreachable')+'</div>'}</div>
+      ${ram}
+    </div>`;}).join('');
+}
+function renderModels(models){
+  const el=$('models'); if(!el)return;
+  if(!models.length){el.innerHTML='<div class="fnote">No models running</div>'; $('modelsstat').textContent=''; return;}
+  $('modelsstat').textContent=models.length+' live';
+  el.innerHTML=models.map(m=>{
+    const run=m.running!=null?Math.round(m.running):'—';
+    const wait=m.waiting!=null?Math.round(m.waiting):'—';
+    const kv=m.kv!=null?m.kv+'%':'—';
+    return `<div class="mcard">
+      <div class="mtitle"><span class="livedot"></span>${agEsc(m.name||'model')}</div>
+      <div class="mhost">${agEsc(m.host||m.endpoint||'')}</div>
+      <div class="mstats">
+        <div class="mstat"><div class="k">Running</div><div class="v" style="color:var(--teal)">${run}</div></div>
+        <div class="mstat"><div class="k">Waiting</div><div class="v" style="color:var(--org)">${wait}</div></div>
+        <div class="mstat"><div class="k">KV</div><div class="v" style="color:var(--pur)">${kv}</div></div>
+      </div>
+    </div>`;}).join('');
+}
+async function pollFleet(){
+  try{const d=await (await fetch('/api/fleet')).json(); renderFleet(d.nodes||[]); renderModels(d.models||[]);}catch(e){}
+}
+function startFleet(){ pollFleet(); if(FLEETTIMER)clearInterval(FLEETTIMER); FLEETTIMER=setInterval(pollFleet,3000); }
+
+loadPresets(); setRunning(false); startFleet();
 </script>
 <script>
 /* ---- Matrix Mode: theme toggle + digital rain (additive; app logic above is untouched) ---- */

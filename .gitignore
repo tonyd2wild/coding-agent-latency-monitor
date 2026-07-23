@@ -1,7 +1,11 @@
 presets.json
 nodes.json
+harness-profiles.json
 __pycache__/
 *.pyc
 /tmp/
 config.json
 runs.jsonl
+*.log
+nohup-*.log
+server-nohup.log

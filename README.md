@@ -11,7 +11,9 @@ Great for stress-testing a local rig (DGX Spark, RTX box, etc.) under concurrent
 - **True parallelism** — all N runs are launched **server-side** and multiplexed back over one connection, so you're not capped by the browser's ~6-connections-per-host limit. Goes up to 32 parallel.
 - **Real kill switch** — `Stop` / `🛑 KILL ALL` (and closing the tab) tell the server to slam every upstream model connection shut, so the backend **actually aborts** the requests and your GPUs stop. No runaway jobs after you hit stop.
 - **Live per-run metrics** — TTFT, live tok/s, end-to-end time, token count, streaming output.
-- **Hardware strip** — pulls vLLM `/metrics` (running/waiting/KV-cache) for any endpoint, and — optionally — **real per-GPU util / memory / temperature via SSH** (see `nodes.json`).
+- **Hardware strip** — pulls vLLM `/metrics` (running/waiting/KV-cache) for the current endpoint during a run, and — optionally — **real per-GPU util / memory / temperature via SSH** (see `nodes.json`).
+- **🖥️ Live Fleet** — an always-on view of **every** node in `nodes.json` at once, polled in parallel every ~3s (starts on page load, not just during a run). One glassmorphic card per box with animated per-GPU util bars, a colored temp pill, VRAM used/total, and system RAM. Unreachable nodes show up dimmed as *offline* instead of erroring. Backed by `GET /api/fleet` (parallel SSH with short timeouts + a ~2s server-side cache so rapid polls never spam SSH).
+- **🧠 Live Models** — a live card per model that's actually up: it probes each unique preset endpoint's `/v1/models`, and for the ones responding shows the endpoint host plus live **requests running / waiting** and **KV-cache %** from `/metrics`. Shows *No models running* when nothing answers. Same `/api/fleet` poll.
 - **Shareable summary** — on finish/stop it computes peak aggregate, sustained avg, per-stream high/low/avg tok/s, total tokens, avg TTFT/E2E, wall time, and gives you a **📋 Copy for sharing** block.
 - **Zero dependencies** — pure Python stdlib (`http.server`) + one static HTML file. Runs anywhere Python 3 does.
 - **🟩 Matrix Mode** — header toggle that reskins the whole monitor Matrix-style: black everything, phosphor-green glow, digital-rain canvas falling behind your streaming agents. Persists via localStorage.
@@ -41,9 +43,17 @@ Set **Parallel**, **Max tokens**, **Temp**, **Thinking**, pick an endpoint, hit 
 { "Local vLLM (:8000)": "http://localhost:8000/v1|my-model" }
 ```
 
-**`nodes.json`** (optional) — for real per-GPU metrics. Key is a substring of the endpoint host; value is `[user@host, ssh_key_path]`. Needs passwordless SSH + `nvidia-smi` on that host. Omit the file and the hardware strip just uses vLLM `/metrics`.
+**`nodes.json`** (optional) — for real per-GPU metrics and the **Live Fleet** view. Key is a substring of the endpoint host; value is `[user@host, ssh_key_path]` **or** `[user@host, ssh_key_path, "Display Name"]` (the 3rd element is optional and just labels the fleet card — it defaults to the host). Needs passwordless SSH + `nvidia-smi` on each host. List every box you want on the fleet view. Omit the file and the hardware strip just uses vLLM `/metrics`.
+```json
+{
+  "192.0.2.10": ["user@192.0.2.10", "~/.ssh/id_ed25519", "GPU Rig A"],
+  "192.0.2.20": ["user@192.0.2.20", "~/.ssh/id_ed25519"]
+}
+```
 
-Both files are **git-ignored** — keep your real hosts/keys out of the repo.
+**`PORT`** — the server listens on `7900` by default; override with an env var: `PORT=7905 python3 server.py`.
+
+Both `presets.json` and `nodes.json` are **git-ignored** — keep your real hosts/keys out of the repo.
 
 ## Run history & Past Runs
 

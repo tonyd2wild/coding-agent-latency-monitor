@@ -1,0 +1,7 @@
+{
+  "Bare endpoint (control)": {"sys": 0, "tools": 0, "tool_result": 0},
+  "Light agent (~4k ctx)": {"sys": 2500, "tools": 1200, "tool_result": 300},
+  "Standard agent (~12k ctx)": {"sys": 7000, "tools": 4500, "tool_result": 700},
+  "Supervisor (~26k ctx)": {"sys": 16000, "tools": 8500, "tool_result": 1400},
+  "Heavy agent (~46k ctx)": {"sys": 30000, "tools": 14000, "tool_result": 2200}
+}

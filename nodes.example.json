@@ -1,4 +1,5 @@
 {
-  "_comment": "OPTIONAL: real per-GPU util/mem/temp via SSH. Key = a substring of the endpoint host; value = [user@host, path-to-ssh-key]. Requires passwordless SSH + nvidia-smi on that host. Leave file absent to just use vLLM /metrics.",
-  "192.0.2.10": ["user@192.0.2.10", "~/.ssh/id_ed25519"]
+  "_comment": "OPTIONAL real per-GPU util/mem/temp via SSH. Key = a substring of the endpoint host. Value = [user@host, ssh_key] OR [user@host, ssh_key, \"Display Name\"] (the 3rd element is optional and just labels the card; defaults to the host). Requires passwordless SSH + nvidia-smi on that host. Powers the per-run hardware strip AND the always-on Live Fleet view. Leave the file absent to just use vLLM /metrics.",
+  "192.0.2.10": ["user@192.0.2.10", "~/.ssh/id_ed25519", "GPU Rig A"],
+  "192.0.2.20": ["user@192.0.2.20", "~/.ssh/id_ed25519"]
 }
